@@ -1,115 +1,156 @@
 from MQTTPubSub import MQTTPubSub
-from google.protobuf.json_format import MessageToJson
+from google.protobuf import json_format
+from google.protobuf.json_format import MessageToDict
 import time
+import sys
+import json
+sys.path.append("applicationProtos")
+from applicationProtos import sensed_pb2
+from applicationProtos import actuated_pb2
+import base64
 
-import applicationProtos
 
-
-
-
-##############################################
-#	NS Components
-#############################################
-
-def NSPub_onConnect(mqttc, obj, flags, rc):
-    print("rc: "+str(rc))
-
-def NSPub_onMessage(mqttc, obj, msg):
-    print(msg.topic+" "+str(msg.qos)+" "+str(msg.payload))
-
-def NSPub_onPublish(mqttc, obj, mid):
-    print("mid: "+str(mid))
-
-def NSPub_onSubscribe(mqttc, obj, mid, granted_qos):
-    print("Subscribed: "+str(mid)+" "+str(granted_qos))
+protosJson = {}
+ns_sensor_message = sensed_pb2.sensor_values()
+mw_actuation_message = actuated_pb2.targetConfigurations()
 
 
 
-
-def NSSub_onConnect(mqttc, obj, flags, rc):
-    print("rc: "+str(rc))
 
 def NSSub_onMessage(mqttc, obj, msg):
-    print(msg.topic+" "+str(msg.qos)+" "+str(msg.payload))
+	
 
-def NSSub_onPublish(mqttc, obj, mid):
-    print("mid: "+str(mid))
+	decodedData = str(base64.b64decode(json.loads(str(msg.payload))["data"]))
+	ns_sensor_message.ParseFromString(decodedData)
+	mw_message = MessageToDict(ns_sensor_message) 
+	print mw_message
+	mwPub.publish(json.dumps(mw_message))
 
-def NSSub_onSubscribe(mqttc, obj, mid, granted_qos):
-    print("Subscribed: "+str(mid)+" "+str(granted_qos))
-
-
-
-
-##############################################
-#	MW Components
-#############################################
-
-
-
-def MWPub_onConnect(mqttc, obj, flags, rc):
-    print("rc: "+str(rc))
-
-def MWPub_onMessage(mqttc, obj, msg):
-    print(msg.topic+" "+str(msg.qos)+" "+str(msg.payload))
-
-def MWPub_onPublish(mqttc, obj, mid):
-    print("mid: "+str(mid))
-
-def MWPub_onSubscribe(mqttc, obj, mid, granted_qos):
-    print("Subscribed: "+str(mid)+" "+str(granted_qos))
-
-
-
-
-def MWSub_onConnect(mqttc, obj, flags, rc):
-    print("rc: "+str(rc))
-
-def MWSub_onMessage(mqttc, obj, msg):
-    print(msg.topic+" "+str(msg.qos)+" "+str(msg.payload))
-
-def MWSub_onPublish(mqttc, obj, mid):
-    print("mid: "+str(mid))
-
-def MWSub_onSubscribe(mqttc, obj, mid, granted_qos):
-    print("Subscribed: "+str(mid)+" "+str(granted_qos))
 
 
 
 
 
-################################################
+def MWSub_onMessage(mqttc, obj, msg):
+    
+	data = {}
+	data['reference'] = 'a'
+	data['confirmed'] = False
+	data['fport'] = 1
+	print msg.payload
+	json_format.Parse(msg.payload, mw_actuation_message, ignore_unknown_fields=False)
+	data['data'] = base64.b64encode(mw_actuation_message.SerializeToString())
+	nsPub.publish(json.dumps(data))
+    
+
+
+def MWSub_onConnect(client, userdata, flags, rc):
+    
+    print("Connected to MW SUB with result code "+str(rc))
+
+
+
+def MWPub_onConnect(client, userdata, flags, rc):
+    
+    print("Connected to MW PUB with result code "+str(rc))
+
+
+
+
+def NSSub_onConnect(client, userdata, flags, rc):
+    
+    print("Connected to NS SUB result code "+str(rc))
+
+
+
+def NSPub_onConnect(client, userdata, flags, rc):
+    
+    print("Connected to NS PUB with result code "+str(rc))
+
+
+
+
+
+
+
+
+mwSubParams = {}
+mwSubParams["url"] = "10.156.14.6"
+mwSubParams["port"] = 2333
+mwSubParams["timeout"] = 60
+mwSubParams["topic"] = "70b3d58ff0031de5_update"
+mwSubParams["onMessage"] = MWSub_onMessage
+mwSubParams["onConnect"] = MWSub_onConnect
+mwSubParams["username"] = "admin"
+mwSubParams["password"] = "admin@123"
+mwSub = MQTTPubSub(mwSubParams)
+
+
+
+mwPubParams = {}
+mwPubParams["url"] = "10.156.14.6"
+mwPubParams["port"] = 2333
+mwPubParams["timeout"] = 60
+mwPubParams["onConnect"] = MWPub_onConnect
+mwPubParams["topic"] = "70b3d58ff0031de5"
+mwPubParams["username"] = "admin"
+mwPubParams["password"] = "admin@123"
+#mwPubParams["onMessage"] = MWPub_onMessage
+mwPub = MQTTPubSub(mwPubParams)
+
+
+
+
+
+
+
+nsSubParams = {}
+nsSubParams["url"] = "10.156.14.16"
+nsSubParams["port"] = 1883
+nsSubParams["timeout"] = 60
+nsSubParams["topic"] = "application/2/node/70b3d58ff0031de5/rx"
+nsSubParams["onMessage"] = NSSub_onMessage
+nsSubParams["onConnect"] = NSSub_onConnect
+nsSubParams["username"] = "loraserver"
+nsSubParams["password"] = "password"
+nsSub = MQTTPubSub(nsSubParams)
+
+
+nsPubParams = {}
+nsPubParams["url"] = "10.156.14.16"
+nsPubParams["port"] = 1883
+nsPubParams["timeout"] = 60
+nsPubParams["topic"] = "application/2/node/70b3d58ff0031de5/tx"
+#nsPubParams["onMessage"] = NSPub_onMessage
+nsPubParams["onConnect"] = NSSub_onConnect
+nsPubParams["username"] = "loraserver"
+nsPubParams["password"] = "password"
+nsPub = MQTTPubSub(nsPubParams)
+
+
+
+
+
+
 
 
 def main():
 
-	ns_url = "m2m.eclipse.org"
-	ns_port = 1883
-	ns_timeout = 60
-	ns_topic = "$SYS/broker/bytes/sent"
-
-	ns = MQTTPubSub(NSSub_onMessage, NSSub_onConnect, NSSub_onPublish, NSSub_onSubscribe, ns_url, ns_port, ns_topic, ns_timeout, username = None, password = None)
-	ns_rc = ns.run()
 
 
 
-	print ("&&&&&&&&&&&&&&&&&&&&&&&&&")
-	print("$$$$$$$$$$$$$$$$$$$$$$$$$")
-	print ("Connecting to Middleware")
-
-	mw_url = "10.156.14.16"
-	mw_port = 1883
-	mw_timeout = 60
-	mw_topic = "application/2/node/70b3d58ff0031de5/rx"
-	mw_username = "loraserver"
-	mw_password = "password"
-
-	mw = MQTTPubSub(MWSub_onMessage, MWSub_onConnect, MWSub_onPublish, MWSub_onSubscribe, mw_url, mw_port, mw_topic, mw_timeout, mw_username, mw_password)
-	mw_rc = mw.run()
-	print("mw_rc:" + str(mw_rc))
+	mwSub_rc = mwSub.run()
+	nsSub_rc = nsSub.run()
+	
+	mwPub_rc = mwPub.run()
+	nsPub_rc = nsPub.run()
+	
 
 	while True:
-		time.sleep(0.5)
+		time.sleep(10)
+
+
+
 
 if __name__ == "__main__":
     main()

@@ -19,30 +19,40 @@ import threading
 
 
 class MQTTPubSub:
-    def __init__(self, onMessage, onConnect, onPublish, onSubscribe, url, port, topic, timeout, username, password):
+    def __init__(self, params):
 
-        self.url = url
-        self.port = port
-        self.timeout = timeout
-        self.topic = topic
+        self.url = params["url"]
+        self.port = params["port"]
+        self.timeout = params["timeout"]
+        self.topic = params["topic"]
 
         self._mqttc = mqtt.Client(None)
-        if( username):
-            self.username = username
-            if( password):
-                self.password = password
-            self._mqttc.username_pw_set(self.username,self.password)
+        
+        if( "username" in params):
+            self.username = params["username"]
+            if( "password" in params):
+                self.password = params["password"]
+                self._mqttc.username_pw_set(self.username,self.password)
 
-        self._mqttc.on_message = onMessage
-        self._mqttc.on_connect = onConnect
-        self._mqttc.on_publish = onPublish
-        self._mqttc.on_subscribe = onSubscribe
+        if ("onMessage" in params):
+            self._mqttc.on_message = params["onMessage"]
+        if ("onConnect" in params):
+            self._mqttc.on_connect = params["onConnect"]
+        if ("onPublish" in params):
+            self._mqttc.on_publish = params["onPublish"]
+        if ("onSubscribe" in params):
+            self._mqttc.on_subscribe = params["onSubscribe"]
     
+
+    def publish(self, payload):
+        self._mqttc.publish(self.topic, payload)
+
+
     def run(self):
         self._mqttc.connect(self.url, self.port, self.timeout)
         self._mqttc.subscribe(self.topic, 0)
         threading.Thread(target=self._mqttc.loop_start()).start()
-        print("Thread " + self.topic + " Started")
+        
 
 
 
