@@ -42,7 +42,9 @@ class MQTTPubSub:
             self._mqttc.on_publish = params["onPublish"]
         if ("onSubscribe" in params):
             self._mqttc.on_subscribe = params["onSubscribe"]
-    
+        if ("onDisconnect" in params):
+            self._mqttc.on_disconnect = params["onDisconnect"]
+
 
     def publish(self, payload):
         self._mqttc.publish(self.topic, payload)

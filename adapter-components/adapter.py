@@ -17,13 +17,19 @@ mw_actuation_message = actuated_pb2.targetConfigurations()
 
 
 
+
+def on_disconnect(client, userdata, rc):
+    if rc != 0:
+        print "Unexpected MQTT disconnection. Will auto-reconnect"
+
+
 def NSSub_onMessage(mqttc, obj, msg):
 	
 
 	decodedData = str(base64.b64decode(json.loads(str(msg.payload))["data"]))
 	ns_sensor_message.ParseFromString(decodedData)
 	mw_message = MessageToDict(ns_sensor_message) 
-	print mw_message
+	print (mw_message)
 	mwPub.publish(json.dumps(mw_message))
 
 
@@ -37,7 +43,7 @@ def MWSub_onMessage(mqttc, obj, msg):
 	data['reference'] = 'a'
 	data['confirmed'] = False
 	data['fport'] = 1
-	print msg.payload
+	print (msg.payload)
 	json_format.Parse(msg.payload, mw_actuation_message, ignore_unknown_fields=False)
 	data['data'] = base64.b64encode(mw_actuation_message.SerializeToString())
 	nsPub.publish(json.dumps(data))
@@ -81,6 +87,7 @@ mwSubParams["timeout"] = 60
 mwSubParams["topic"] = "70b3d58ff0031de5_update"
 mwSubParams["onMessage"] = MWSub_onMessage
 mwSubParams["onConnect"] = MWSub_onConnect
+mwSubParams["onDisconnect"] = MWSub_onConnect
 mwSubParams["username"] = "admin"
 mwSubParams["password"] = "admin@123"
 mwSub = MQTTPubSub(mwSubParams)
