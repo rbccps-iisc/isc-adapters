@@ -11,21 +11,13 @@ import base64
 
 
 protosJson = {}
-ns_sensor_message = sensed_pb2.sensor_values()
-mw_actuation_message = actuated_pb2.targetConfigurations()
 
 
-
-
-
-def on_disconnect(client, userdata, rc):
-    if rc != 0:
-        print "Unexpected MQTT disconnection. Will auto-reconnect"
 
 
 def NSSub_onMessage(mqttc, obj, msg):
 	
-
+	ns_sensor_message = sensed_pb2.sensor_values()
 	decodedData = str(base64.b64decode(json.loads(str(msg.payload))["data"]))
 	ns_sensor_message.ParseFromString(decodedData)
 	mw_message = MessageToDict(ns_sensor_message) 
@@ -39,13 +31,14 @@ def NSSub_onMessage(mqttc, obj, msg):
 
 def MWSub_onMessage(mqttc, obj, msg):
     
+	mw_actuation_message = actuated_pb2.targetConfigurations()
 	data = {}
 	data['reference'] = 'a'
 	data['confirmed'] = False
 	data['fport'] = 1
 	print (msg.payload)
 	json_format.Parse(msg.payload, mw_actuation_message, ignore_unknown_fields=False)
-	data['data'] = base64.b64encode(mw_actuation_message.SerializeToString())
+	data['data'] = (base64.b64encode(mw_actuation_message.SerializeToString())).decode("utf-8")
 	nsPub.publish(json.dumps(data))
     
 
@@ -87,7 +80,6 @@ mwSubParams["timeout"] = 60
 mwSubParams["topic"] = "70b3d58ff0031de5_update"
 mwSubParams["onMessage"] = MWSub_onMessage
 mwSubParams["onConnect"] = MWSub_onConnect
-mwSubParams["onDisconnect"] = MWSub_onConnect
 mwSubParams["username"] = "admin"
 mwSubParams["password"] = "admin@123"
 mwSub = MQTTPubSub(mwSubParams)
