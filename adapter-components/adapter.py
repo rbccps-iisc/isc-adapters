@@ -17,8 +17,10 @@ protosJson = {}
 
 def NSSub_onMessage(mqttc, obj, msg):
 	
+
 	ns_sensor_message = sensed_pb2.sensor_values()
-	decodedData = str(base64.b64decode(json.loads(str(msg.payload))["data"]))
+	jsonData = json.loads((msg.payload).decode("utf-8"))
+	decodedData = base64.b64decode(jsonData["data"])
 	ns_sensor_message.ParseFromString(decodedData)
 	mw_message = MessageToDict(ns_sensor_message) 
 	print (mw_message)
