@@ -4,10 +4,10 @@ from google.protobuf.json_format import MessageToDict
 import time
 import sys
 import json
-sys.path.append("applicationProtos")
-from applicationProtos import sensed_pb2
-from applicationProtos import actuated_pb2
 import base64
+
+import sensed_pb2
+import actuated_pb2
 
 
 protosJson = {}
@@ -16,16 +16,18 @@ protosJson = {}
 
 
 def NSSub_onMessage(mqttc, obj, msg):
-	
-
-	ns_sensor_message = sensed_pb2.sensor_values()
-	jsonData = json.loads((msg.payload).decode("utf-8"))
-	decodedData = base64.b64decode(jsonData["data"])
-	ns_sensor_message.ParseFromString(decodedData)
-	mw_message = MessageToDict(ns_sensor_message) 
-	print (mw_message)
-	mwPub.publish(json.dumps(mw_message))
-
+        
+    try:            
+        print(msg.topic)
+        ns_sensor_message = sensed_pb2.sensor_values()
+        jsonData = json.loads((msg.payload).decode("utf-8"))
+        decodedData = base64.b64decode(jsonData["data"])
+        ns_sensor_message.ParseFromString(decodedData)
+        mw_message = MessageToDict(ns_sensor_message) 
+        print (mw_message)
+        mwPub.publish(json.dumps(mw_message))
+    except:
+        print("DECODE ERROR")
 
 
 
@@ -33,16 +35,18 @@ def NSSub_onMessage(mqttc, obj, msg):
 
 def MWSub_onMessage(mqttc, obj, msg):
     
-	mw_actuation_message = actuated_pb2.targetConfigurations()
-	data = {}
-	data['reference'] = 'a'
-	data['confirmed'] = False
-	data['fport'] = 1
-	print (msg.payload)
-	json_format.Parse(msg.payload, mw_actuation_message, ignore_unknown_fields=False)
-	data['data'] = (base64.b64encode(mw_actuation_message.SerializeToString())).decode("utf-8")
-	nsPub.publish(json.dumps(data))
-    
+    try:
+        mw_actuation_message = actuated_pb2.targetConfigurations()
+        data = {}
+        data['reference'] = 'a'
+        data['confirmed'] = False
+        data['fport'] = 1
+        print (msg.payload)
+        json_format.Parse(msg.payload, mw_actuation_message, ignore_unknown_fields=False)
+        data['data'] = (base64.b64encode(mw_actuation_message.SerializeToString())).decode("utf-8")
+        nsPub.publish(json.dumps(data))
+    except:
+        print("DECODE ERROR")
 
 
 def MWSub_onConnect(client, userdata, flags, rc):
@@ -109,7 +113,7 @@ nsSubParams = {}
 nsSubParams["url"] = "10.156.14.16"
 nsSubParams["port"] = 1883
 nsSubParams["timeout"] = 60
-nsSubParams["topic"] = "application/2/node/70b3d58ff0031de5/rx"
+nsSubParams["topic"] = "application/2/node/+/rx"
 nsSubParams["onMessage"] = NSSub_onMessage
 nsSubParams["onConnect"] = NSSub_onConnect
 nsSubParams["username"] = "loraserver"
@@ -121,7 +125,7 @@ nsPubParams = {}
 nsPubParams["url"] = "10.156.14.16"
 nsPubParams["port"] = 1883
 nsPubParams["timeout"] = 60
-nsPubParams["topic"] = "application/2/node/70b3d58ff0031de5/tx"
+nsPubParams["topic"] = "application/2/node/+/tx"
 #nsPubParams["onMessage"] = NSPub_onMessage
 nsPubParams["onConnect"] = NSSub_onConnect
 nsPubParams["username"] = "loraserver"

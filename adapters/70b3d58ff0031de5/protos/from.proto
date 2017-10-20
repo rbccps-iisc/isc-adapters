@@ -1,5 +1,3 @@
-syntax = "proto2";
-
 message sensor_values {
 	
 	required int32 dataSamplingInstant =1;
@@ -11,3 +9,4 @@ message sensor_values {
 	optional bool  slaveAlive = 7;
 
 }
+
