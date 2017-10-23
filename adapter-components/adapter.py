@@ -1,12 +1,12 @@
-from MQTTPubSub import MQTTPubSub
+from .MQTTPubSub import MQTTPubSub
 from google.protobuf import json_format
 from google.protobuf.json_format import MessageToDict
 import time
 import sys
 import json
 sys.path.append("applicationProtos")
-from applicationProtos import sensed_pb2
-from applicationProtos import actuated_pb2
+from .applicationProtos import sensed_pb2
+from .applicationProtos import actuated_pb2
 import base64
 
 

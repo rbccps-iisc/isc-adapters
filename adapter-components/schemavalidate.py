@@ -8,6 +8,24 @@ import base64
 from google.protobuf.json_format import MessageToDict
 from google.protobuf import json_format
 
+def subscribeToBroker(user, passwd, host, port, vHost, exchange, queue):
+    credentials = pika.PlainCredentials(user, passwd)
+    conn = pika.BlockingConnection(
+        pika.ConnectionParameters(host=host, port=port, virtual_host=vHost, credentials=credentials))
+    print('connection to amqp established..')
+
+    channel = conn.channel()
+    channel.exchange_declare(exchange=exchange)
+    channel.queue_bind(exchange=exchange, queue=queue)
+
+    def callback(ch, method, properties, body):
+        # if 'json' do normal validation, if 'protocol-buffers' do a proto conversion, convert to json and finally validate
+        print("[x]", body)
+        # sensedProto(body)
+
+    channel.basic_consume(callback, queue=queue)
+    channel.start_consuming()
+
 #json parser on catalogue server
 with urllib.request.urlopen('https://smartcity.rbccps.org/api/0.1.0/cat') as resp:
     data = json.loads(resp.read().decode())
@@ -45,22 +63,4 @@ def actuatedProto(body):
     actuated['data'] = (base64.b64encode(proto_actuated.SerializeToString())).decode("utf-8")
     print(actuated)
 
-def subscribeToBroker(user, passwd, host, port, vHost, exchange, queue):
-    credentials = pika.PlainCredentials(user, passwd)
-    conn = pika.BlockingConnection(
-        pika.ConnectionParameters(host=host, port=port, virtual_host=vHost, credentials=credentials))
-    print('connection to amqp established..')
-
-    channel = conn.channel()
-    channel.exchange_declare(exchange=exchange)
-    channel.queue_bind(exchange=exchange, queue=queue)
-
-    def callback(ch, method, properties, body):
-        # if 'json' do normal validation, if 'protocol-buffers' do a proto conversion, convert to json and finally validate
-        print("[x]", body)
-        # sensedProto(body)
-
-    channel.basic_consume(callback, queue=queue)
-    channel.start_consuming()
-
-subscribeToBroker(host='10.156.14.6',user='rbccps',passwd='rbccps@123',port=5672,vHost='/',exchange='amqp.topic',queue='database_queue')
+#subscribeToBroker(host='10.156.14.6',user='rbccps',passwd='rbccps@123',port=5672,vHost='/',exchange='amqp.topic',queue='database_queue')
