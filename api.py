@@ -6,49 +6,93 @@ import json
 import requests
 import os
 import subprocess as sub
+import sys
+import rq 
+from shutil import copyfile
+import zmq
+
 
 app = Flask(__name__)
 api = Api(app)
 
+objectListFile = "objectList.json"
+objectList = []
+itemEntry = {}
 
+context = zmq.Context()
+print("Connecting to Adapter with ports %s" % 5555)
+socket = context.socket(zmq.REQ)
+socket.setsockopt(zmq.LINGER, 2)
+socket.connect ("tcp://localhost:%s" % 5555)
+poller = zmq.Poller()
+poller.register(socket, zmq.POLLIN)
 
-#parser = reqparse.RequestParser()
-#parser.add_argument('catURL', type=string, help='catURL not provided')
-#parser.add_argument('protoURL', type=string, help='protoURL not provided')
-#args = parser.parse_args()
+#
+#   { "id" : 70b3d58ff01201, "protoTo" : "msgName", "protoFrom":"msgName" }
+#
+
+workingDir = sys.path[0]
+
 
 cwd = os.getcwd()
-protoLink = "https://raw.githubusercontent.com/rbccps-iisc/applications-streetlight/master/proto_stm/txmsg/sensed.proto"
 
 catURL = ""
 protoURL = ""
 
 class Register(Resource):
     def post(self):
-        
+        flag = 0
         try:
             json_data = request.get_json()
             catURL = json_data["catURL"]
-            protoURL = json_data["protoURL"]
             catJSON = requests.get(catURL).json()
             id = catJSON["items"][0]["id"]
-            adapterRoot = cwd + '/adapters/' + id
+            itemEntry["id"] = id
+            adapterRoot = cwd + '/adapters/id_' + id
             os.mkdir(adapterRoot, mode = 0o755)
-            protoRoot = adapterRoot + '/protos'
-            os.mkdir(protoRoot, mode = 0o755)
-            protoFrom = catJSON["items"][0]["serialization_from_device"]
-            protoTo =  catJSON["items"][0]["serialization_to_device"]
+            sys.path.insert(0, workingDir + '/' + itemEntry["id"])
+            
+            try:
+                protoTo = catJSON["items"][0]["serialization_to_device"]["schema_ref"]
+                protoToLink = protoTo["link"]
+                with open(adapterRoot + '/to.proto','wb') as file:
+                    resp = requests.get(protoToLink)
+                    file.write(resp.content)
+                p = sub.call('protoc -I=' + adapterRoot + ' --python_out=' + adapterRoot + ' ' +  adapterRoot + '/to.proto'  ,shell=True)
+                itemEntry["protoTo"] = catJSON["items"][0]["serialization_to_device"]["schema_ref"]["mainMessageName"]
+                flag = flag + 1 
+            except:
+                print("Couldn't get *To* Proto")
 
-            with open(protoRoot + '/from.proto','wb') as file:
-                resp = requests.get(protoLink)
-                file.write(resp.content)
 
+            try:
+                protoFrom = catJSON["items"][0]["serialization_from_device"]["schema_ref"]
+                protoFromLink = protoFrom["link"]
+                with open(adapterRoot + '/from.proto','wb') as file:
+                    resp = requests.get(protoFromLink)
+                    file.write(resp.content)
+                                
+                p = sub.call('protoc -I=' + adapterRoot + ' --python_out=' + adapterRoot + ' ' +  adapterRoot + '/from.proto'  ,shell=True)
+                itemEntry["protoFrom"] = catJSON["items"][0]["serialization_from_device"]["schema_ref"]["mainMessageName"]
+                flag = flag + 1
+            except:
+                print("Couldn't get *From* Proto")
+            
+            copyfile('initstructure.tmpl', adapterRoot + '/__init__.py')
 
-            #ADD to.proto code here
-            #
-            ##
+            objectList.append(itemEntry)
+            print(objectList)          
+            with open(objectListFile, 'w') as jsFile:
+                json.dump(objectList, jsFile)
 
-            p = sub.call('protoc -I=' + protoRoot + ' --python_out=' + protoRoot + ' ' +  protoRoot + '/from.proto',shell=True)
+            if( flag == 2):
+                flag = 0
+                socket.send_string(json.dumps(itemEntry))
+                if poller.poll(10*1000): # 10s timeout in milliseconds
+                    msg = socket.recv()
+                    return "Success"
+                else:
+                    return "Failure"
 
         except Exception as e:
             print(e)
