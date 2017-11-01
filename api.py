@@ -15,8 +15,17 @@ import zmq
 app = Flask(__name__)
 api = Api(app)
 
-objectListFile = "objectList.json"
-objectList = []
+
+
+workingDir = sys.path[0]
+items = {}
+
+try:
+    f = open(workingDir + "/items.json", 'r')
+    items = json.load(f)
+except:
+    print("Couldn't load list")
+
 itemEntry = {}
 
 context = zmq.Context()
@@ -28,13 +37,11 @@ poller = zmq.Poller()
 poller.register(socket, zmq.POLLIN)
 
 #
-#   { "id" : 70b3d58ff01201, "protoTo" : "msgName", "protoFrom":"msgName" }
+#   { "70b3d58ff01201":{ "protoTo" : "msgName", "protoFrom":"msgName" }}
 #
 
-workingDir = sys.path[0]
 
 
-cwd = os.getcwd()
 
 catURL = ""
 protoURL = ""
@@ -45,12 +52,10 @@ class Register(Resource):
         try:
             json_data = request.get_json()
             catURL = json_data["catURL"]
-            catJSON = requests.get(catURL).json()
+            catJSON = requests.get(catURL, verify=False).json()
             id = catJSON["items"][0]["id"]
-            itemEntry["id"] = id
-            adapterRoot = cwd + '/adapters/id_' + id
+            adapterRoot = workingDir + '/adapters/id_' + id
             os.mkdir(adapterRoot, mode = 0o755)
-            sys.path.insert(0, workingDir + '/' + itemEntry["id"])
             
             try:
                 protoTo = catJSON["items"][0]["serialization_to_device"]["schema_ref"]
@@ -78,12 +83,11 @@ class Register(Resource):
             except:
                 print("Couldn't get *From* Proto")
             
-            copyfile('initstructure.tmpl', adapterRoot + '/__init__.py')
 
-            objectList.append(itemEntry)
-            print(objectList)          
-            with open(objectListFile, 'w') as jsFile:
-                json.dump(objectList, jsFile)
+            items[id]=itemEntry
+            print(itemEntry)          
+            with open(workingDir + '/items.json', 'w') as jsFile:
+                json.dump(items, jsFile)
 
             if( flag == 2):
                 flag = 0

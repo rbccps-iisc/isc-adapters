@@ -11,7 +11,6 @@ class MQTTPubSub:
         self.url = params["url"]
         self.port = params["port"]
         self.timeout = params["timeout"]
-        self.topic = params["topic"]
 
         self._mqttc = mqtt.Client(None)
         
@@ -33,8 +32,8 @@ class MQTTPubSub:
             self._mqttc.on_disconnect = params["onDisconnect"]
 
 
-    def publish(self, payload):
-        self._mqttc.publish(self.topic, payload)
+    def publish(self, topic, payload):
+        self._mqttc.publish(topic, payload)
 
 
     def run(self):
