@@ -1,2 +1,3 @@
+adapters/*
 *.pyc
 __pycache__

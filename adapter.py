@@ -1,4 +1,5 @@
 from MQTTPubSub import MQTTPubSub
+from AMQPPubSub import AMQPPubSub 
 from google.protobuf import json_format
 from google.protobuf.json_format import MessageToDict
 import time
@@ -12,6 +13,7 @@ import zmq
 import os
 import importlib.machinery
 
+
 adaptersDir = os.getcwd() + "/adapters"
 cwd = os.getcwd()
 
@@ -19,16 +21,28 @@ modules = {}
 items = {}
 
 
+ns_rx_topic = "application/1/node/{id}/rx"
+ns_tx_topic = "application/1/node/{id}/tx"
+
 try:
     with open(cwd + '/items.json', 'r') as f:
         items = json.load(f)
         for item in items.keys(): 
             try:
                 modules[item] = {}
-                modules[item]["protoFrom"]["object"] = getattr(importlib.machinery.SourceFileLoader('from_pb2',adaptersDir + '/id_' + item + '/from_pb2.py').load_module(), items[item]["protoFrom"])
-                modules[item]["protoTo"]["object"] = getattr(importlib.machinery.SourceFileLoader('to_pb2',adaptersDir + '/id_' + item + '/to_pb2.py').load_module(), items[item]["protoTo"])
-            except:
+                from_spec = importlib.util.spec_from_file_location('from_' + item + '_pb2', adaptersDir + '/id_' + item + '/from_' + item + '_pb2.py')
+                from_mod = importlib.util.module_from_spec(from_spec)
+                from_spec.loader.exec_module(from_mod)
+                modules[item]["protoFrom"] = getattr(from_mod,items[item]["protoFrom"])()
+
+                to_spec = importlib.util.spec_from_file_location('to_' + item + '_pb2', adaptersDir + '/id_' + item + '/to_' + item + '_pb2.py')
+                to_mod = importlib.util.module_from_spec(to_spec)
+                to_spec.loader.exec_module(to_mod)
+                modules[item]["protoTo"] = getattr(to_mod, items[item]["protoTo"])()
+
+            except Exception as e:
                 print("Couldn't load", item)
+                print(e)
 except:
     print("Couldn't load")
 
@@ -45,10 +59,22 @@ def server():
         message = socket.recv()
         print("Received request  %s" %  message)
         itemEntry = json.loads(str(message,'utf-8'))
-        itemId = list(itemEntry.keys())[0]
+        itemId = itemEntry["id"]
         modules[itemId] = {}
-        modules[itemId]["protoFrom"] = getattr(importlib.machinery.SourceFileLoader('from_pb2',adaptersDir + '/id_' + itemId + '/from_pb2.py').load_module(), itemEntry["protoFrom"])
-        modules[itemId]["protoTo"] = getattr(importlib.machinery.SourceFileLoader('to_pb2',adaptersDir + '/id_' + itemId + '/to_pb2.py').load_module(), itemEntry["protoTo"])
+
+        from_spec = importlib.util.spec_from_file_location('from_pb2', adaptersDir + '/id_' + itemId + '/from_pb2.py')
+        from_mod = importlib.util.module_from_spec(from_spec)
+        from_spec.loader.exec_module(from_mod)
+        modules[itemId]["protoFrom"] = getattr(from_mod, itemEntry[itemId]["protoFrom"])()
+
+
+        to_spec = importlib.util.spec_from_file_location('to_pb2', adaptersDir + '/id_' + itemId + '/to_pb2.py')
+        to_mod = importlib.util.module_from_spec(to_spec)
+        to_spec.loader.exec_module(to_mod)
+        modules[item]["protoTo"] = getattr(to_mod, items[item]["protoTo"])()
+
+
+
         socket.send_string("ACK")
         
 Process(target=server).start()
@@ -64,9 +90,9 @@ def NSSub_onMessage(mqttc, obj, msg):
 
 # NS Message topics are of the form application/{applicationId}/node/{id}/rx
     try:            
-        topic = msg.topic 
-        topic = topic.split('/')
-        itemId = topic[4]
+        topic = msg.topic.split('/') 
+        itemId = topic[3] #{id} is the 4th field
+        print('Received ', itemId, ' from NS')
         if itemId in modules:
             ns_sensor_message = modules[itemId]["protoFrom"] 
             jsonData = json.loads((msg.payload).decode("utf-8"))
@@ -74,41 +100,34 @@ def NSSub_onMessage(mqttc, obj, msg):
             ns_sensor_message.ParseFromString(decodedData)
             mw_message = MessageToDict(ns_sensor_message) 
             print (mw_message)
-            mwPub.publish(itemId, json.dumps(mw_message))
-    except:
+            mwSub.publish(itemId,json.dumps(mw_message))
+    except Exception as e:
         print("DECODE ERROR")
+        print(e)
 
 
 
 
 
-def MWSub_onMessage(mqttc, obj, msg):
+def MWSub_onMessage(ch, method, properties, body):
 
 #Change according to wildcard entry 
     try:
-        mw_actuation_message = modules["id"]["protoTo"]
+        _id = method.routing_key.replace('_update','')
+        print(_id)
+        mw_actuation_message = modules[_id]["protoTo"]
+        print('Received ', _id, ' from MW')
         data = {}
         data['reference'] = 'a'
         data['confirmed'] = False
         data['fport'] = 1
-        print (msg.payload)
-        json_format.Parse(msg.payload, mw_actuation_message, ignore_unknown_fields=False)
+        print(body)
+        json_format.Parse(body, mw_actuation_message, ignore_unknown_fields=False)
         data['data'] = (base64.b64encode(mw_actuation_message.SerializeToString())).decode("utf-8")
-        nsPub.publish(json.dumps(data),)
-    except:
+        nsSub.publish(ns_tx_topic.replace("{id}", _id), json.dumps(data))
+    except Exception as e:
         print("DECODE ERROR")
-
-
-def MWSub_onConnect(client, userdata, flags, rc):
-    
-    print("Connected to MW SUB with result code "+str(rc))
-
-
-
-def MWPub_onConnect(client, userdata, flags, rc):
-    
-    print("Connected to MW PUB with result code "+str(rc))
-
+        print(e)
 
 
 
@@ -130,26 +149,13 @@ def NSPub_onConnect(client, userdata, flags, rc):
 
 mwSubParams = {}
 mwSubParams["url"] = "10.156.14.6"
-mwSubParams["port"] = 2333
+mwSubParams["port"] = 5672
 mwSubParams["timeout"] = 60
 mwSubParams["onMessage"] = MWSub_onMessage
-mwSubParams["onConnect"] = MWSub_onConnect
 mwSubParams["username"] = "admin"
 mwSubParams["password"] = "admin@123"
-mwSub = MQTTPubSub(mwSubParams)
-
-
-
-mwPubParams = {}
-mwPubParams["url"] = "10.156.14.6"
-mwPubParams["port"] = 2333
-mwPubParams["timeout"] = 60
-mwPubParams["onConnect"] = MWPub_onConnect
-mwPubParams["username"] = "admin"
-mwPubParams["password"] = "admin@123"
-#mwPubParams["onMessage"] = MWPub_onMessage
-mwPub = MQTTPubSub(mwPubParams)
-
+mwSubParams["exchange"] = "amq.topic"
+mwSub = AMQPPubSub(mwSubParams)
 
 
 
@@ -164,21 +170,8 @@ nsSubParams["topic"] = "application/1/node/+/rx"
 nsSubParams["onMessage"] = NSSub_onMessage
 nsSubParams["onConnect"] = NSSub_onConnect
 nsSubParams["username"] = "loraserver"
-nsSubParams["password"] = "password"
+nsSubParams["password"] = "loraserver"
 nsSub = MQTTPubSub(nsSubParams)
-
-
-nsPubParams = {}
-nsPubParams["url"] = "gateways.rbccps.org"
-nsPubParams["port"] = 1883
-nsPubParams["timeout"] = 60
-nsPubParams["topic"] = "application/1/node/+/tx"
-#nsPubParams["onMessage"] = NSPub_onMessage
-nsPubParams["onConnect"] = NSSub_onConnect
-nsPubParams["username"] = "loraserver"
-nsPubParams["password"] = "password"
-nsPub = MQTTPubSub(nsPubParams)
-
 
 
 
@@ -190,8 +183,6 @@ def main():
     mwSub_rc = mwSub.run()
     nsSub_rc = nsSub.run()
 	
-    mwPub_rc = mwPub.run()
-    nsPub_rc = nsPub.run()
 	
 
     while True:

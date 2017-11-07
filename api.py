@@ -60,10 +60,10 @@ class Register(Resource):
             try:
                 protoTo = catJSON["items"][0]["serialization_to_device"]["schema_ref"]
                 protoToLink = protoTo["link"]
-                with open(adapterRoot + '/to.proto','wb') as file:
+                with open(adapterRoot + '/to_' + id + '.proto','wb') as file:
                     resp = requests.get(protoToLink)
                     file.write(resp.content)
-                p = sub.call('protoc -I=' + adapterRoot + ' --python_out=' + adapterRoot + ' ' +  adapterRoot + '/to.proto'  ,shell=True)
+                p = sub.call('protoc -I=' + adapterRoot + ' --python_out=' + adapterRoot + ' ' +  adapterRoot + '/to_' + id + '.proto'  ,shell=True)
                 itemEntry["protoTo"] = catJSON["items"][0]["serialization_to_device"]["schema_ref"]["mainMessageName"]
                 flag = flag + 1 
             except:
@@ -73,11 +73,11 @@ class Register(Resource):
             try:
                 protoFrom = catJSON["items"][0]["serialization_from_device"]["schema_ref"]
                 protoFromLink = protoFrom["link"]
-                with open(adapterRoot + '/from.proto','wb') as file:
+                with open(adapterRoot + '/from_' + id + '.proto','wb') as file:
                     resp = requests.get(protoFromLink)
                     file.write(resp.content)
                                 
-                p = sub.call('protoc -I=' + adapterRoot + ' --python_out=' + adapterRoot + ' ' +  adapterRoot + '/from.proto'  ,shell=True)
+                p = sub.call('protoc -I=' + adapterRoot + ' --python_out=' + adapterRoot + ' ' +  adapterRoot + '/from_' + id + '.proto'  ,shell=True)
                 itemEntry["protoFrom"] = catJSON["items"][0]["serialization_from_device"]["schema_ref"]["mainMessageName"]
                 flag = flag + 1
             except:
@@ -85,7 +85,8 @@ class Register(Resource):
             
 
             items[id]=itemEntry
-            print(itemEntry)          
+            itemEntry["id"] = id
+            print(itemEntry)
             with open(workingDir + '/items.json', 'w') as jsFile:
                 json.dump(items, jsFile)
 

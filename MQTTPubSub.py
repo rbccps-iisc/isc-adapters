@@ -11,7 +11,7 @@ class MQTTPubSub:
         self.url = params["url"]
         self.port = params["port"]
         self.timeout = params["timeout"]
-
+        self.topic = params["topic"]
         self._mqttc = mqtt.Client(None)
         
         if( "username" in params):
