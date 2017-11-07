@@ -1,23 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ChangeListManager">
-    <list default="true" id="35765fbf-ded9-4d55-b0cc-db77d432d4db" name="Default" comment="">
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/.idea/vcs.xml" />
-      <change type="DELETED" beforePath="$PROJECT_DIR$/adapters/id_70b3d58ff0031de5/from.proto" afterPath="" />
-      <change type="DELETED" beforePath="$PROJECT_DIR$/adapters/id_70b3d58ff0031de5/from_pb2.py" afterPath="" />
-      <change type="DELETED" beforePath="$PROJECT_DIR$/adapters/id_70b3d58ff0031de5/to.proto" afterPath="" />
-      <change type="DELETED" beforePath="$PROJECT_DIR$/adapters/id_70b3d58ff0031de5/to_pb2.py" afterPath="" />
-      <change type="DELETED" beforePath="$PROJECT_DIR$/adapters/id_70b3d58ff0031f00/from.proto" afterPath="" />
-      <change type="DELETED" beforePath="$PROJECT_DIR$/adapters/id_70b3d58ff0031f00/to.proto" afterPath="" />
-      <change type="DELETED" beforePath="$PROJECT_DIR$/adapters/id_70b3d58ff0031f0a/from.proto" afterPath="" />
-      <change type="DELETED" beforePath="$PROJECT_DIR$/adapters/id_70b3d58ff0031f0a/from_pb2.py" afterPath="" />
-      <change type="DELETED" beforePath="$PROJECT_DIR$/adapters/id_70b3d58ff0031f0a/to.proto" afterPath="" />
-      <change type="DELETED" beforePath="$PROJECT_DIR$/adapters/id_70b3d58ff0031f0a/to_pb2.py" afterPath="" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/MQTTPubSub.py" afterPath="$PROJECT_DIR$/MQTTPubSub.py" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/adapter.py" afterPath="$PROJECT_DIR$/adapter.py" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/api.py" afterPath="$PROJECT_DIR$/api.py" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/items.json" afterPath="$PROJECT_DIR$/items.json" />
-    </list>
+    <list default="true" id="35765fbf-ded9-4d55-b0cc-db77d432d4db" name="Default" comment="" />
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="TRACKING_ENABLED" value="true" />
     <option name="SHOW_DIALOG" value="false" />

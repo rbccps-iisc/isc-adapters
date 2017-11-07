@@ -1,3 +1,5 @@
 adapters/*
+# exception to the rule
+!adapters/.gitkeep
 *.pyc
 __pycache__
