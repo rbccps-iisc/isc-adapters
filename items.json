@@ -1,1 +1,1 @@
-{"70b3d58ff0031de5": {"protoTo": "targetConfigurations", "protoFrom": "sensor_values", "id": "70b3d58ff0031de5"}, "70b3d58ff0031f0a": {"protoTo": "targetConfigurations", "protoFrom": "sensor_values", "id": "70b3d58ff0031de5"} }
+{"70b3d58ff0031f0a": {"id": "70b3d58ff0031de5", "protoTo": "targetConfigurations", "protoFrom": "sensor_values"}, "70b3d58ff0031de5": {"id": "70b3d58ff0031de5", "protoTo": "targetConfigurations", "protoFrom": "sensor_values"}}

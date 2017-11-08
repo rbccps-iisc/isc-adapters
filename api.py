@@ -30,11 +30,8 @@ itemEntry = {}
 
 context = zmq.Context()
 print("Connecting to Adapter with ports %s" % 5555)
-socket = context.socket(zmq.REQ)
-socket.setsockopt(zmq.LINGER, 2)
+socket = context.socket(zmq.PUB)
 socket.connect ("tcp://localhost:%s" % 5555)
-poller = zmq.Poller()
-poller.register(socket, zmq.POLLIN)
 
 #
 #   { "70b3d58ff01201":{ "protoTo" : "msgName", "protoFrom":"msgName" }}
@@ -93,11 +90,6 @@ class Register(Resource):
             if( flag == 2):
                 flag = 0
                 socket.send_string(json.dumps(itemEntry))
-                if poller.poll(10*1000): # 10s timeout in milliseconds
-                    msg = socket.recv()
-                    return "Success"
-                else:
-                    return "Failure"
 
         except Exception as e:
             print(e)

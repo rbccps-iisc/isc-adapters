@@ -53,7 +53,8 @@ def server():
     
     
     context = zmq.Context()
-    socket = context.socket(zmq.REP)
+    socket = context.socket(zmq.SUB)
+    socket.setsockopt_string(zmq.SUBSCRIBE, '')
     socket.bind("tcp://*:%s" % 5555)
     while True:
         message = socket.recv()
@@ -62,21 +63,21 @@ def server():
         itemId = itemEntry["id"]
         modules[itemId] = {}
 
-        from_spec = importlib.util.spec_from_file_location('from_pb2', adaptersDir + '/id_' + itemId + '/from_pb2.py')
-        from_mod = importlib.util.module_from_spec(from_spec)
-        from_spec.loader.exec_module(from_mod)
-        modules[itemId]["protoFrom"] = getattr(from_mod, itemEntry[itemId]["protoFrom"])()
+        try:
+            from_spec = importlib.util.spec_from_file_location('from_' + itemId + '_pb2', adaptersDir + '/id_' + itemId + '/from_' + itemId + '_pb2.py')
+            from_mod = importlib.util.module_from_spec(from_spec)
+            from_spec.loader.exec_module(from_mod)
+            modules[itemId]["protoFrom"] = getattr(from_mod, itemEntry["protoFrom"])()
+            to_spec = importlib.util.spec_from_file_location('to_' + itemId + '_pb2', adaptersDir + '/id_' + itemId + '/to_' + itemId + '_pb2.py')
+            to_mod = importlib.util.module_from_spec(to_spec)
+            to_spec.loader.exec_module(to_mod)
+            modules[itemId]["protoTo"] = getattr(to_mod, itemEntry["protoTo"])()
+
+        except:
+            print("Couldn't load objects")
 
 
-        to_spec = importlib.util.spec_from_file_location('to_pb2', adaptersDir + '/id_' + itemId + '/to_pb2.py')
-        to_mod = importlib.util.module_from_spec(to_spec)
-        to_spec.loader.exec_module(to_mod)
-        modules[item]["protoTo"] = getattr(to_mod, items[item]["protoTo"])()
 
-
-
-        socket.send_string("ACK")
-        
 Process(target=server).start()
 
 
