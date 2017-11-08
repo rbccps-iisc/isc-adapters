@@ -7,8 +7,6 @@ import sys
 import json
 import base64
 from multiprocessing import Process
-from redis import Redis
-from rq import Queue
 import zmq
 import os
 import importlib.machinery

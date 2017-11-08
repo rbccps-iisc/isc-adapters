@@ -7,7 +7,6 @@ import requests
 import os
 import subprocess as sub
 import sys
-import rq 
 from shutil import copyfile
 import zmq
 
