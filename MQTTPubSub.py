@@ -1,16 +1,3 @@
-#!/usr/bin/python
-# Copyright (c) 2013 Roger Light <roger@atchoo.org>
-#
-# All rights reserved. This program and the accompanying materials
-# are made available under the terms of the Eclipse Distribution License v1.0
-# which accompanies this distribution. 
-#
-# The Eclipse Distribution License is available at 
-#   http://www.eclipse.org/org/documents/edl-v10.php.
-#
-# Contributors:
-#    Roger Light - initial implementation
-# This example shows how you can use the MQTT client in a class.
 import sys
 import os
 import inspect
@@ -25,7 +12,6 @@ class MQTTPubSub:
         self.port = params["port"]
         self.timeout = params["timeout"]
         self.topic = params["topic"]
-
         self._mqttc = mqtt.Client(None)
         
         if( "username" in params):
@@ -46,8 +32,8 @@ class MQTTPubSub:
             self._mqttc.on_disconnect = params["onDisconnect"]
 
 
-    def publish(self, payload):
-        self._mqttc.publish(self.topic, payload)
+    def publish(self, topic, payload):
+        self._mqttc.publish(topic, payload)
 
 
     def run(self):
