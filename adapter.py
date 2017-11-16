@@ -53,6 +53,7 @@ except:
 
 def schema(json, devId):
 
+    print('in function schema.....')
     with urllib.request.urlopen('https://smartcity.rbccps.org/api/0.1.0/cat') as resp:
         data = json.loads(resp.read().decode())
         sensor_data = data['items']
