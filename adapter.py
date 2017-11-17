@@ -88,10 +88,13 @@ def NSSub_onMessage(mqttc, obj, msg):
        
 
 # NS Message topics are of the form application/{applicationId}/node/{id}/rx
-    try:            
-        topic = msg.topic.split('/') 
-        itemId = topic[3] #{id} is the 4th field
-        print('Received ', itemId, ' from NS')
+    try:
+        try:
+            topic = msg.topic.split('/') 
+            itemId = topic[3] #{id} is the 4th field
+            print('Received ', itemId, ' from NS')
+        except Exception as e:
+            print("ignored", topic)
         if itemId in modules:
             ns_sensor_message = modules[itemId]["protoFrom"] 
             jsonData = json.loads((msg.payload).decode("utf-8"))
@@ -112,18 +115,24 @@ def MWSub_onMessage(ch, method, properties, body):
 
 #Change according to wildcard entry 
     try:
-        _id = method.routing_key.replace('_update','')
-        print(_id)
-        mw_actuation_message = modules[_id]["protoTo"]
-        print('Received ', _id, ' from MW')
-        data = {}
-        data['reference'] = 'a'
-        data['confirmed'] = False
-        data['fport'] = 1
-        print(body)
-        json_format.Parse(body, mw_actuation_message, ignore_unknown_fields=False)
-        data['data'] = (base64.b64encode(mw_actuation_message.SerializeToString())).decode("utf-8")
-        nsSub.publish(ns_tx_topic.replace("{id}", _id), json.dumps(data))
+    
+        if("_update" in method.routing_key  ): 
+            _id = method.routing_key.replace('_update','')
+            if( _id in modules):
+                print(_id)
+                mw_actuation_message = modules[_id]["protoTo"]
+                print('Received ', _id, ' from MW')
+                data = {}
+                data['reference'] = 'a'
+                data['confirmed'] = False
+                data['fport'] = 1
+                print(body)
+                json_format.Parse(body, mw_actuation_message, ignore_unknown_fields=False)
+                data['data'] = (base64.b64encode(mw_actuation_message.SerializeToString())).decode("utf-8")
+                nsSub.publish(ns_tx_topic.replace("{id}", _id), json.dumps(data))
+
+        else:
+            print("Ignored", method.routing_key)
     except Exception as e:
         print("DECODE ERROR")
         print(e)
