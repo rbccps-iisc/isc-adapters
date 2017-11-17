@@ -22,6 +22,9 @@ items = {}
 ns_rx_topic = "application/1/node/{id}/rx"
 ns_tx_topic = "application/1/node/{id}/tx"
 
+#sahil
+validationFlag = False
+
 try:
     with open(cwd + '/items.json', 'r') as f:
         items = json.load(f)
@@ -43,6 +46,29 @@ try:
                 print(e)
 except:
     print("Couldn't load")
+
+
+
+
+def schema(json, devId):
+
+    print('in function schema.....')
+    with urllib.request.urlopen('https://smartcity.rbccps.org/api/0.1.0/cat') as resp:
+        data = json.loads(resp.read().decode())
+        sensor_data = data['items']
+        data.clear()
+
+    sensor_schema = {}
+    for i in range(0, len(sensor_data)):
+        sensor_schema[sensor_data[i]['id']] = sensor_data[i]['data_schema']
+
+    try :
+        validate(instance= json, schema= sensor_schema[devId])
+        validationFlag = True
+
+    except Exception as e:
+        print('given device data is not valid to its schema..')
+        validationFlag = False
 
 
 
@@ -129,7 +155,11 @@ def MWSub_onMessage(ch, method, properties, body):
                 print(body)
                 json_format.Parse(body, mw_actuation_message, ignore_unknown_fields=False)
                 data['data'] = (base64.b64encode(mw_actuation_message.SerializeToString())).decode("utf-8")
-                nsSub.publish(ns_tx_topic.replace("{id}", _id), json.dumps(data))
+
+                # edit by sahil
+                schema(json=data['data'], devId=_id)
+                if (validationFlag):
+                    nsSub.publish(ns_tx_topic.replace("{id}", _id), json.dumps(data))
 
         else:
             print("Ignored", method.routing_key)
