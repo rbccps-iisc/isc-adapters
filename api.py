@@ -30,7 +30,7 @@ itemEntry = {}
 context = zmq.Context()
 print("Connecting to Adapter with ports %s" % 5555)
 socket = context.socket(zmq.PUB)
-socket.connect ("tcp://localhost:%s" % 5555)
+socket.connect ("tcp://10.156.14.9:%s" % 5555)
 
 #
 #   { "70b3d58ff01201":{ "protoTo" : "msgName", "protoFrom":"msgName" }}
