@@ -44,6 +44,7 @@ protoURL = ""
 
 class Register(Resource):
     def post(self):
+        itemEntry = {}
         flag = 0
         try:
             json_data = request.get_json()
@@ -55,33 +56,37 @@ class Register(Resource):
             
             try:
                 protoTo = catJSON["items"][0]["serialization_to_device"]["schema_ref"]
-                protoToLink = protoTo["link"]
-                with open(adapterRoot + '/to_' + id + '.proto','wb') as file:
-                    resp = requests.get(protoToLink)
-                    file.write(resp.content)
-                p = sub.call('protoc -I=' + adapterRoot + ' --python_out=' + adapterRoot + ' ' +  adapterRoot + '/to_' + id + '.proto'  ,shell=True)
-                itemEntry["protoTo"] = catJSON["items"][0]["serialization_to_device"]["schema_ref"]["mainMessageName"]
+                if protoTo is not None:
+                    protoToLink = protoTo["link"]
+                    with open(adapterRoot + '/to_' + id + '.proto','wb') as file:
+                        resp = requests.get(protoToLink)
+                        file.write(resp.content)
+                    p = sub.call('protoc -I=' + adapterRoot + ' --python_out=' + adapterRoot + ' ' +  adapterRoot + '/to_' + id + '.proto'  ,shell=True)
+                    itemEntry["protoTo"] = catJSON["items"][0]["serialization_to_device"]["schema_ref"]["mainMessageName"]
                 flag = flag + 1 
             except:
+                flag = flag + 1
                 print("Couldn't get *To* Proto")
 
 
             try:
                 protoFrom = catJSON["items"][0]["serialization_from_device"]["schema_ref"]
-                protoFromLink = protoFrom["link"]
-                with open(adapterRoot + '/from_' + id + '.proto','wb') as file:
-                    resp = requests.get(protoFromLink)
-                    file.write(resp.content)
-                                
-                p = sub.call('protoc -I=' + adapterRoot + ' --python_out=' + adapterRoot + ' ' +  adapterRoot + '/from_' + id + '.proto'  ,shell=True)
-                itemEntry["protoFrom"] = catJSON["items"][0]["serialization_from_device"]["schema_ref"]["mainMessageName"]
+                if protoFrom is not None:
+                    protoFromLink = protoFrom["link"]
+                    with open(adapterRoot + '/from_' + id + '.proto','wb') as file:
+                        resp = requests.get(protoFromLink)
+                        file.write(resp.content)
+
+                    p = sub.call('protoc -I=' + adapterRoot + ' --python_out=' + adapterRoot + ' ' +  adapterRoot + '/from_' + id + '.proto'  ,shell=True)
+                    itemEntry["protoFrom"] = catJSON["items"][0]["serialization_from_device"]["schema_ref"]["mainMessageName"]
                 flag = flag + 1
             except:
+                flag = flag + 1
                 print("Couldn't get *From* Proto")
-            
 
-            items[id]=itemEntry
             itemEntry["id"] = id
+            items[id]=itemEntry
+
             print(itemEntry)
             with open(workingDir + '/items.json', 'w') as jsFile:
                 json.dump(items, jsFile)
