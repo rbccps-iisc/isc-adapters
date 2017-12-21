@@ -136,30 +136,24 @@ def MWSub_onMessage(ch, method, properties, body):
 
 
 #Change according to wildcard entry
-    try:
 
-        if("_update" in method.routing_key  ):
-            _id = method.routing_key.replace('_update','')
-
-            if module is not None:
-                try:
-                    mw_actuation_message = modules[_id]["protoTo"]
-                    print('Received ', _id, ' from MW')
-                    data = {}
-                    data['reference'] = 'a'
-                    data['confirmed'] = False
-                    data['fport'] = 1
-                    print(body)
-                    json_format.Parse(body, mw_actuation_message, ignore_unknown_fields=False)
-                    data['data'] = (base64.b64encode(mw_actuation_message.SerializeToString())).decode("utf-8")
-                    nsSub.publish(ns_tx_topic.replace("{id}", _id), json.dumps(data))
-                except:
-                    pass
-        else:
-            print("Ignored", method.routing_key)
-    except Exception as e:
-        print("DECODE ERROR")
-        print(e)
+    if("_update" in method.routing_key  ):
+        _id = method.routing_key.replace('_update','')
+        try:
+            mw_actuation_message = modules[_id]["protoTo"]
+            print('Received ', _id, ' from MW')
+            data = {}
+            data['reference'] = 'a'
+            data['confirmed'] = False
+            data['fport'] = 1
+            print(body)
+            json_format.Parse(body, mw_actuation_message, ignore_unknown_fields=False)
+            data['data'] = (base64.b64encode(mw_actuation_message.SerializeToString())).decode("utf-8")
+            nsSub.publish(ns_tx_topic.replace("{id}", _id), json.dumps(data))
+        except Exception as e:
+            print(_id, " Failed Decoding")
+    else:
+        print("Ignored", method.routing_key)
 
 
 
