@@ -66,7 +66,7 @@ try:
         items = json.load(f)
         for item in items.keys():
             try:
-                modules.loadModule(item)
+                loadModule(item)
 
             except Exception as e:
                 print("Couldn't load", item)
