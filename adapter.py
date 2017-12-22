@@ -64,10 +64,9 @@ def getModule(itemId):
 try:
     with open(cwd + '/items.json', 'r') as f:
         items = json.load(f)
-        for item in items.keys():
+        for item in items:
             try:
-                loadModule(item)
-
+                loadModule(items[item])
             except Exception as e:
                 print("Couldn't load", item)
                 print(e)
@@ -146,12 +145,12 @@ def MWSub_onMessage(ch, method, properties, body):
             data['reference'] = 'a'
             data['confirmed'] = False
             data['fport'] = 1
-            print(body)
             json_format.Parse(body, mw_actuation_message, ignore_unknown_fields=False)
+            print(body)
             data['data'] = (base64.b64encode(mw_actuation_message.SerializeToString())).decode("utf-8")
             nsSub.publish(ns_tx_topic.replace("{id}", _id), json.dumps(data))
         except Exception as e:
-            print(_id, " Failed Decoding")
+            print(_id, " Failed Decoding", e)
     else:
         print("Ignored", method.routing_key)
 
