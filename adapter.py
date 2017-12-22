@@ -149,6 +149,7 @@ def MWSub_onMessage(ch, method, properties, body):
             print(body)
             data['data'] = (base64.b64encode(mw_actuation_message.SerializeToString())).decode("utf-8")
             nsSub.publish(ns_tx_topic.replace("{id}", _id), json.dumps(data))
+            mw_actuation_message.Clear()
         except Exception as e:
             print(_id, " Failed Decoding", e)
     else:
