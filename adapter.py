@@ -79,9 +79,9 @@ def NSSub_onConnect(client, userdata, flags, rc):
 
 def NSSub_onMessage(client, userdata, msg):
     global r
-    mq-dic={}
-    mq-dic={msg.payload.decode('utf-8'):msg.topic.split("/")[3]}
-    redConn.rpush("MQ-side-messages", mq-dic)
+    mq_dict={}
+    mq_dict={msg.payload.decode('utf-8'):msg.topic.split("/")[3]}
+    redConn.rpush("MQ-side-messages", mq_dict)
     decode_push.delay()
 
 #-------------------------------------------------------------------------------------------------------------------------
@@ -94,8 +94,6 @@ cwd = os.getcwd()
 modules = {}
 items = {}
 
-
-ns_rx_topic = "application/1/node/{id}/rx"
 ns_tx_topic = "application/1/node/{id}/tx"
 
 validationFlag = False

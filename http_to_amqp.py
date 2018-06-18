@@ -65,11 +65,11 @@ def MWSub_onMessage(ch, method, properties, body):
         data['data'] = (base64.b64encode(mw_actuation_message.SerializeToString())).decode("utf-8")
         schema(json=data['data'], devId= _id)
         if(validationFlag):
-            nsSub.publish(ns_tx_topic.replace("{id}", _id), json.dumps(data))
-
+		#------!!!ADD link for posting to HTTP SERVER!!!------
     except Exception as e:
         print("ENCODE ERROR")
         print(e)
+
 
 #-------------------------------------------------------------------------------------------------------------------------
 
@@ -80,10 +80,6 @@ cwd = os.getcwd()
 
 modules = {}
 items = {}
-
-
-ns_rx_topic = "application/1/node/{id}/rx"
-ns_tx_topic = "application/1/node/{id}/tx"
 
 validationFlag = False
 
@@ -175,18 +171,14 @@ mwSubParams["password"] = "admin@123"
 mwSubParams["exchange"] = "amq.topic"
 mwSub = AMQPPubSub(mwSubParams)
 
-#----------------------------------------------------------------------------------------------
-
-if __name__=="__main__":
-    main()
-
+#-------------------------------------------------------------------------------------------------------------------------------
 
 async def server_one():
 	while True:
 		requests.get("")							#------!!!CONFIGURE THIS!!!------
 		if r.status_code==requests.status.ok:
-			dic=[:r.text]							#------!!!CONFIGURE THIS!!!------
-			redConn.push("HTTP-messages", dic)
+			http_dict=[:r.text]						#------!!!CONFIGURE THIS!!!------
+			redConn.push("HTTP-messages", http_dict)
 			decode_push.delay()
 			await asyncio.sleep(0)						#------!!!CONFIGURE THIS!!!------
 
@@ -196,4 +188,8 @@ def main():
 	tasks = [ioloop.create_task(server_one()), ioloop.create_task(bar())]		#------!!!CONFIGURE THIS!!!------
 	wait_tasks = asyncio.wait(tasks)
 	ioloop.run_until_complete(wait_tasks)
-	ioloop.close()
+	ioloop.close(
+
+
+if __name__=="__main__":
+    main())
