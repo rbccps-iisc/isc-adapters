@@ -1,4 +1,5 @@
-from MQTTPubSub import MQTTPubSub
+import asyncio
+import requests
 from AMQPPubSub import AMQPPubSub
 from time import sleep
 import redis, hiredis
@@ -26,7 +27,7 @@ appd=Celery('print', broker='redis://localhost/0')
 @appd.task
 def decode_push():
     global red
-    inc_dict=ast.literal_eval(redConn.lpop("MQ-side-messages").decode('utf-8'))
+    inc_dict=ast.literal_eval(redConn.lpop("HTTP-messages").decode('utf-8'))
     payload=(inc_dict.keys()[0]).decode('utf-8')
     device_id=inc_dict.values()[0]
     #code for proto decode
@@ -69,20 +70,6 @@ def MWSub_onMessage(ch, method, properties, body):
     except Exception as e:
         print("ENCODE ERROR")
         print(e)
-
-
-
-def NSSub_onConnect(client, userdata, flags, rc):
-    print("Connected with result code "+str(rc))
-
-
-
-def NSSub_onMessage(client, userdata, msg):
-    global r
-    mq-dic={}
-    mq-dic={msg.payload.decode('utf-8'):msg.topic.split("/")[3]}
-    redConn.rpush("MQ-side-messages", mq-dic)
-    decode_push.delay()
 
 #-------------------------------------------------------------------------------------------------------------------------
 
@@ -174,7 +161,7 @@ Process(target=server).start()
 
 protosJson = {}
 
-#---------------------------------------------------------------------------------------------------------------------------------------
+#----------------------------------------------------------------------------------------------
 
 #Connection parameters for AMQP and MQTT connections
 
@@ -188,34 +175,25 @@ mwSubParams["password"] = "admin@123"
 mwSubParams["exchange"] = "amq.topic"
 mwSub = AMQPPubSub(mwSubParams)
 
-
-
-nsSubParams = {}
-nsSubParams["url"] = "gateways.rbccps.org"
-nsSubParams["port"] = 1883
-nsSubParams["timeout"] = 60
-nsSubParams["topic"] = "application/1/node/+/rx"
-nsSubParams["onMessage"] = NSSub_onMessage
-nsSubParams["onConnect"] = NSSub_onConnect
-nsSubParams["username"] = "loraserver"
-nsSubParams["password"] = "loraserver"
-nsSub = MQTTPubSub(nsSubParams)
-
-
-
-#----------------------------------------------------------------------------
-
-
-
-def main():
-
-    mwSub_rc = mwSub.run()
-    nsSub_rc = nsSub.run()
-
-
-
-    while True:
-        sleep(10)
+#----------------------------------------------------------------------------------------------
 
 if __name__=="__main__":
     main()
+
+
+async def server_one():
+	while True:
+		requests.get("")							#------!!!CONFIGURE THIS!!!------
+		if r.status_code==requests.status.ok:
+			dic=[:r.text]							#------!!!CONFIGURE THIS!!!------
+			redConn.push("HTTP-messages", dic)
+			decode_push.delay()
+			await asyncio.sleep(0)						#------!!!CONFIGURE THIS!!!------
+
+def main():
+	ioloop = asyncio.get_event_loop()
+	mwSub_rc = mwSub.run()
+	tasks = [ioloop.create_task(server_one()), ioloop.create_task(bar())]		#------!!!CONFIGURE THIS!!!------
+	wait_tasks = asyncio.wait(tasks)
+	ioloop.run_until_complete(wait_tasks)
+	ioloop.close()
