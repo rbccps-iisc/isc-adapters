@@ -18,7 +18,7 @@ import ast
 
 #---------------------------------------------------------------------------------------------------------------------
 
-#Code for celery tasks to be implemented when messages arrive to the MQTT topic(s)
+#Code for celery tasks to be implemented when messages arrive from the HTTP server(s)
 
 redConn = redis.StrictRedis(host='localhost', port=6379, db=0)
 
@@ -46,7 +46,7 @@ def decode_push():
 
 #------------------------------------------------------------------------------------------------------------------------
 
-#Defining various callbacks for MQTT and AMQP connections
+#Defining callbacks for AMQP connections
 
 def MWSub_onMessage(ch, method, properties, body):
 
@@ -123,7 +123,7 @@ def schema(json, devId):
         validationFlag = True
 
     except Exception as e:
-        print('given device data is not valid to its schema..')
+        print('Given device data is not valid to its schema..')
         validationFlag = False
 
 
@@ -173,22 +173,25 @@ mwSub = AMQPPubSub(mwSubParams)
 
 #-------------------------------------------------------------------------------------------------------------------------------
 
-async def server_one():
+#Defining async tasks for polling to URLs
+
+async def poll_to_url(device_id):
 	while True:
-		requests.get("")							#------!!!CONFIGURE THIS!!!------
+		requests.get(""+device_id)					#------!!!ADD APPROPRIATE URL!!!------
 		if r.status_code==requests.status.ok:
-			http_dict=[:r.text]						#------!!!CONFIGURE THIS!!!------
+			http_dict=[device_id:r.text]					
 			redConn.push("HTTP-messages", http_dict)
 			decode_push.delay()
-			await asyncio.sleep(0)						#------!!!CONFIGURE THIS!!!------
+			await asyncio.sleep(5)
+
+#-------------------------------------------------------------------------------------------------------------------------------
 
 def main():
-	ioloop = asyncio.get_event_loop()
+	loop = asyncio.get_event_loop()
 	mwSub_rc = mwSub.run()
-	tasks = [ioloop.create_task(server_one()), ioloop.create_task(bar())]		#------!!!CONFIGURE THIS!!!------
-	wait_tasks = asyncio.wait(tasks)
-	ioloop.run_until_complete(wait_tasks)
-	ioloop.close(
+	gather_tasks = asyncio.gather(poll_to_url(device_id))			#---!!!ADDING TASKS DYNAMICALLY, writing method for parsing device IDs---
+	loop.run_until_complete(gather_tasks)
+	loop.close(
 
 
 if __name__=="__main__":
