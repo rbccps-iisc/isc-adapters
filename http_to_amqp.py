@@ -16,33 +16,36 @@ from google.protobuf.json_format import MessageToDict
 from jsonschema import validate
 import ast
 
+
+redConn = redis.StrictRedis(host='localhost', port=6379, db=0)
+
 #---------------------------------------------------------------------------------------------------------------------
 
 #Code for celery tasks to be implemented when messages arrive from the HTTP server(s)
 
-redConn = redis.StrictRedis(host='localhost', port=6379, db=0)
+#NOT NEEDED. TO BE REMOVED IN NEXT UPDATE
 
-appd=Celery('print', broker='redis://localhost/0')
+##app_decode=Celery('Decode', broker='redis://localhost/0')
 
-@appd.task
-def decode_push():
-    global red
-    inc_dict=ast.literal_eval(redConn.lpop("HTTP-messages").decode('utf-8'))
-    payload=(inc_dict.keys()[0]).decode('utf-8')
-    device_id=inc_dict.values()[0]
-    #code for proto decode
-    try:
-        if device_id in modules:
-            ns_sensor_message = modules[device_id]["protoFrom"]
-            jsonData = json.loads(payload)
-            decodedData = base64.b64decode(jsonData["data"])
-            ns_sensor_message.ParseFromString(decodedData)
-            mw_message = MessageToDict(ns_sensor_message)
-            print (mw_message)
-            mwSub.publish(itemId,json.dumps(mw_message))
-    except Exception as e:
-        print("DECODE ERROR")
-        print(e)
+##@app_decode.task
+##def decode_push():
+##    global red
+##    inc_dict=ast.literal_eval(redConn.lpop("incoming-messages").decode('utf-8'))
+##    payload=(inc_dict.keys()[0]).decode('utf-8')
+##    device_id=inc_dict.values()[0]
+##    #code for proto decode
+##    try:
+##        if device_id in modules:
+##            ns_sensor_message = modules[device_id]["protoFrom"]
+##            jsonData = json.loads(payload)
+##            decodedData = base64.b64decode(jsonData["data"])
+##            ns_sensor_message.ParseFromString(decodedData)
+##            mw_message = MessageToDict(ns_sensor_message)
+##            print (mw_message)
+##            mwSub.publish(itemId,json.dumps(mw_message))
+##    except Exception as e:
+##        print("DECODE ERROR")
+##        print(e)
 
 #------------------------------------------------------------------------------------------------------------------------
 
@@ -159,7 +162,7 @@ protosJson = {}
 
 #----------------------------------------------------------------------------------------------
 
-#Connection parameters for AMQP and MQTT connections
+#Connection parameters for AMQP connection
 
 mwSubParams = {}
 mwSubParams["url"] = "10.156.14.6"
@@ -175,21 +178,25 @@ mwSub = AMQPPubSub(mwSubParams)
 
 #Defining async tasks for polling to URLs
 
+poll=Celery('Poll', broker='redis://localhost/0')
+
+@poll.task
 async def poll_to_url(device_id):
 	while True:
 		requests.get(""+device_id)					#------!!!ADD APPROPRIATE URL!!!------
 		if r.status_code==requests.status.ok:
 			http_dict=[device_id:r.text]					
-			redConn.push("HTTP-messages", http_dict)
+			redConn.push("incoming-messages", http_dict)
 			decode_push.delay()
 			await asyncio.sleep(5)
 
 #-------------------------------------------------------------------------------------------------------------------------------
 
 def main():
+	#MAY CHANGE THIS TO USE APScheduler
 	loop = asyncio.get_event_loop()
 	mwSub_rc = mwSub.run()
-	gather_tasks = asyncio.gather(poll_to_url(device_id))			#---!!!ADDING TASKS DYNAMICALLY, writing method for parsing device IDs---
+	gather_tasks = asyncio.gather(*[poll_to_url(device_id)])		#---!!!ADDING TASKS DYNAMICALLY, pass a list of fn() with IDs---
 	loop.run_until_complete(gather_tasks)
 	loop.close(
 

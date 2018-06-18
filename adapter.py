@@ -15,18 +15,19 @@ from google.protobuf.json_format import MessageToDict
 from jsonschema import validate
 import ast
 
+
+redConn = redis.StrictRedis(host='localhost', port=6379, db=0)
+
 #---------------------------------------------------------------------------------------------------------------------
 
 #Code for celery tasks to be implemented when messages arrive to the MQTT topic(s)
 
-redConn = redis.StrictRedis(host='localhost', port=6379, db=0)
+app_decode=Celery('Decode', broker='redis://localhost/0')
 
-appd=Celery('print', broker='redis://localhost/0')
-
-@appd.task
+@app_decode.task
 def decode_push():
     global red
-    inc_dict=ast.literal_eval(redConn.lpop("MQ-side-messages").decode('utf-8'))
+    inc_dict=ast.literal_eval(redConn.lpop("incoming-messages").decode('utf-8'))
     payload=(inc_dict.keys()[0]).decode('utf-8')
     device_id=inc_dict.values()[0]
     #code for proto decode
@@ -81,7 +82,7 @@ def NSSub_onMessage(client, userdata, msg):
     global r
     mq_dict={}
     mq_dict={msg.payload.decode('utf-8'):msg.topic.split("/")[3]}
-    redConn.rpush("MQ-side-messages", mq_dict)
+    redConn.rpush("incoming-messages", mq_dict)
     decode_push.delay()
 
 #-------------------------------------------------------------------------------------------------------------------------
@@ -94,6 +95,7 @@ cwd = os.getcwd()
 modules = {}
 items = {}
 
+ns_rx_topic = "application/1/node/{id}/rx"
 ns_tx_topic = "application/1/node/{id}/tx"
 
 validationFlag = False
@@ -198,7 +200,6 @@ nsSubParams["onConnect"] = NSSub_onConnect
 nsSubParams["username"] = "loraserver"
 nsSubParams["password"] = "loraserver"
 nsSub = MQTTPubSub(nsSubParams)
-
 
 
 #----------------------------------------------------------------------------
