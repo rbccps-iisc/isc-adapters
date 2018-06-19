@@ -7,18 +7,26 @@ import subprocess as sub
 import sys
 from shutil import copyfile
 import zmq
+import pymongo
 
 app = Flask(__name__)
 api = Api(app)
 
+client=pymongo.MongoClient()
+db=client.devices_db                                    #DB OF DEVICES
+cln=db.devices                                          #COLLECTION OF DEVICES REGISTERED
 
 
 workingDir = sys.path[0]
 items = {}
 
+#LOAD JSON OBJECTS
 try:
-    f = open(workingDir + "/items.json", 'r')
-    items = json.load(f)
+    #f = open(workingDir + "/items.json", 'r')
+    #items = json.load(f)
+    res=cln.find(projections={'_id':FALSE})
+    for ids in res:
+        items.update(ids)
 except:
     print("Couldn't load list")
 
@@ -79,9 +87,9 @@ class Register(Resource):
             items[id]=itemEntry
             itemEntry["id"] = id
             print(itemEntry)
-            with open(workingDir + '/items.json', 'w') as jsFile:
-                json.dump(items, jsFile)
-
+##            with open(workingDir + '/items.json', 'w') as jsFile:
+##                json.dump(items, jsFile)				#WRITE TO items.json
+            cln.insert_one(items)
             if( flag == 2):
                 flag = 0
                 socket.send_string(json.dumps(itemEntry))

@@ -2,7 +2,7 @@ from MQTTPubSub import MQTTPubSub
 from AMQPPubSub import AMQPPubSub
 from time import sleep
 import redis, hiredis
-import base64 as bs
+import base64
 from celery import Celery
 import zmq
 import json
@@ -14,11 +14,21 @@ from google.protobuf import json_format
 from google.protobuf.json_format import MessageToDict
 from jsonschema import validate
 import ast
-
+import pymongo
 
 redConn = redis.StrictRedis(host='localhost', port=6379, db=0)
 
-#---------------------------------------------------------------------------------------------------------------------
+#----------------------------------------------------------------------------------------------------#
+
+#MongoDB setup
+
+client=pymongo.MongoClient()
+
+db=client.devices_db                                    #DB OF DEVICES
+
+cln=db.devices                                          #COLLECTION OF DEVICES REGISTERED
+
+#----------------------------------------------------------------------------------------------------#
 
 #Code for celery tasks to be implemented when messages arrive to the MQTT topic(s)
 
@@ -44,7 +54,7 @@ def decode_push():
         print("DECODE ERROR")
         print(e)
 
-#------------------------------------------------------------------------------------------------------------------------
+#----------------------------------------------------------------------------------------------------#
 
 #Defining various callbacks for MQTT and AMQP connections
 
@@ -71,7 +81,7 @@ def MWSub_onMessage(ch, method, properties, body):
         print("ENCODE ERROR")
         print(e)
 
-
+#_____!!!!!!ADD A CHECK FOR HTTP DEVICES UP THERE, IN CASE IT IS IMPLEMENTED IN FUTURE!!!!!!_____#
 
 def NSSub_onConnect(client, userdata, flags, rc):
     print("Connected with result code "+str(rc))
@@ -85,7 +95,7 @@ def NSSub_onMessage(client, userdata, msg):
     redConn.rpush("incoming-messages", mq_dict)
     decode_push.delay()
 
-#-------------------------------------------------------------------------------------------------------------------------
+#----------------------------------------------------------------------------------------------------#
 
 #To import proto files to the code 
 
@@ -101,8 +111,12 @@ ns_tx_topic = "application/1/node/{id}/tx"
 validationFlag = False
 
 try:
-    with open(cwd + '/items.json', 'r') as f:
-        items = json.load(f)
+##    with open(cwd + '/items.json', 'r') as f:
+##        items = json.load(f)		#LOAD JSON OBJECTS
+        res=cln.find(projections={'_id':FALSE})
+        for ids in res:
+            items.update(ids)
+
         for item in items.keys(): 
             try:
                 modules[item] = {}
@@ -168,13 +182,12 @@ def server():
             modules[itemId]["protoTo"] = getattr(to_mod, itemEntry["protoTo"])()
         except:
             print("Couldn't load objects")
-            print(sys.exc_traceback.tb_lineno)
 
 Process(target=server).start()
 
 protosJson = {}
 
-#---------------------------------------------------------------------------------------------------------------------------------------
+#----------------------------------------------------------------------------------------------------#
 
 #Connection parameters for AMQP and MQTT connections
 
@@ -202,8 +215,7 @@ nsSubParams["password"] = "loraserver"
 nsSub = MQTTPubSub(nsSubParams)
 
 
-#----------------------------------------------------------------------------
-
+#----------------------------------------------------------------------------------------------------#
 
 
 def main():

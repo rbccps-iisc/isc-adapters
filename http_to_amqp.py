@@ -14,12 +14,24 @@ from jsonschema import validate
 import ast
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import adapter
+import pymongo
 
 redConn = redis.StrictRedis(host='localhost', port=6379, db=0)
 
 scheduler = AsyncIOScheduler
 
-#------------------------------------------------------------------------------------------------------------------------
+#----------------------------------------------------------------------------------------------------------------------#
+
+#MongoDB setup
+
+client=pymongo.MongoClient()
+
+db=client.devices_db					#DB OF DEVICES
+
+cln=db.devices						#COLLECTION OF DEVICES REGISTERED
+
+
+#----------------------------------------------------------------------------------------------------------------------#
 
 ###Defining callbacks for AMQP connections
 ##
@@ -39,7 +51,7 @@ scheduler = AsyncIOScheduler
 ##		schema(json=data['data'], devId= _id)
 ##		#------!!!ADD code for 'post'ing to HTTP SERVER!!!------
 
-#-------------------------------------------------------------------------------------------------------------------------
+#---------------------------------------------------------------------------------------------------------------------#
 
 def schema(json, devId):
 
@@ -58,7 +70,7 @@ def schema(json, devId):
 		validationFlag = True
 
 	except Exception as e:
-		print('Given device data is not valid to its schema..')
+		print('Given device data is not valid to its schema.')
 		validationFlag = False
 
 
@@ -77,15 +89,14 @@ def server():
 		modules[itemId] = {}
 		try:
 			scheduler.add_job(pool_to_url(itemId), 'interval', seconds = 10)
-        	except:
-		print("Couldn't start polling to ID ", itemId)
-		print(sys.exc_traceback.tb_lineno)
+		except:
+			print("Couldn't add job for ID ", itemId)
 
 Process(target=server).start()
 
 protosJson = {}
 
-#----------------------------------------------------------------------------------------------
+#----------------------------------------------------------------------------------------------------------------------#
 
 #Connection parameters for AMQP connection
 
@@ -99,7 +110,7 @@ mwSubParams["password"] = "admin@123"
 mwSubParams["exchange"] = "amq.topic"
 mwSub = AMQPPubSub(mwSubParams)
 
-#-------------------------------------------------------------------------------------------------------------------------------
+#----------------------------------------------------------------------------------------------------------------------#
 
 #Defining celery tasks for polling to URLs
 
@@ -115,18 +126,23 @@ def poll_to_url(device_id):
 			adapter.decode_push.delay()
 			await asyncio.sleep(5)
 
-#-------------------------------------------------------------------------------------------------------------------------------
+#-----------------------------------------------------------------------------------------------------------------------#
 
 def main():
 	try:
-		with open(cwd + '/items.json', 'r') as f:
-			items = json.load(f)
-	        	for item in items.keys(): 
-		        	try:
-					scheduler.add_job(poll_to_url.delay(item), 'interval', seconds = 10)
-				except Exception as e:
-					print("Couldn't add process with ID", item)
-					print(e)
+##		with open(cwd + '/items.json', 'r') as f:
+##			items = json.load(f)			#LOAD JSON OBJECTS
+##		for item in items.keys(): 			#LOAD DEVICES FROM LIST OF DEVICES
+		res=cln.find(projection={"id": TRUE, "_id":FALSE})
+		items=[]
+		for ids in resu:
+			items+list(ids.values())
+		for devID in items:
+			try:
+				scheduler.add_job(poll_to_url.delay(devID), 'interval', seconds = 10)
+			except Exception as e:
+				print("Couldn't add process with ID", devID)
+				print(e)
 	except:
 		print("Couldn't add processes")
 	scheduler.start()
