@@ -15,7 +15,7 @@ from google.protobuf import json_format
 from google.protobuf.json_format import MessageToDict
 from jsonschema import validate
 import ast
-
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 redConn = redis.StrictRedis(host='localhost', port=6379, db=0)
 
@@ -76,85 +76,85 @@ def MWSub_onMessage(ch, method, properties, body):
 
 #-------------------------------------------------------------------------------------------------------------------------
 
-#To import proto files to the code 
+#To import proto files to the code : !!!!!!!NOT NEEDED!!!!!!!!!!
 
-adaptersDir = os.getcwd() + "/adapters"
-cwd = os.getcwd()
+##adaptersDir = os.getcwd() + "/adapters"
+##cwd = os.getcwd()
 
-modules = {}
-items = {}
+##modules = {}
+##items = {}
 
-validationFlag = False
+##validationFlag = False
 
-try:
-    with open(cwd + '/items.json', 'r') as f:
-        items = json.load(f)
-        for item in items.keys(): 
-            try:
-                modules[item] = {}
-                from_spec = importlib.util.spec_from_file_location('from_' + item + '_pb2', adaptersDir + '/id_' + item + '/from_' + item + '_pb2.py')
-                from_mod = importlib.util.module_from_spec(from_spec)
-                from_spec.loader.exec_module(from_mod)
-                modules[item]["protoFrom"] = getattr(from_mod,items[item]["protoFrom"])()
-
-                to_spec = importlib.util.spec_from_file_location('to_' + item + '_pb2', adaptersDir + '/id_' + item + '/to_' + item + '_pb2.py')
-                to_mod = importlib.util.module_from_spec(to_spec)
-                to_spec.loader.exec_module(to_mod)
-                modules[item]["protoTo"] = getattr(to_mod, items[item]["protoTo"])()
-            except Exception as e:
-                print("Couldn't load", item)
-                print(e)
-except:
-    print("Couldn't load")
+##try:
+##    with open(cwd + '/items.json', 'r') as f:
+##        items = json.load(f)
+##        for item in items.keys(): 
+##            try:
+##                modules[item] = {}
+##                from_spec = importlib.util.spec_from_file_location('from_' + item + '_pb2', adaptersDir + '/id_' + item + '/from_' + item + '_pb2.py')
+##                from_mod = importlib.util.module_from_spec(from_spec)
+##                from_spec.loader.exec_module(from_mod)
+##                modules[item]["protoFrom"] = getattr(from_mod,items[item]["protoFrom"])()
+##
+##                to_spec = importlib.util.spec_from_file_location('to_' + item + '_pb2', adaptersDir + '/id_' + item + '/to_' + item + '_pb2.py')
+##                to_mod = importlib.util.module_from_spec(to_spec)
+##                to_spec.loader.exec_module(to_mod)
+##                modules[item]["protoTo"] = getattr(to_mod, items[item]["protoTo"])()
+##            except Exception as e:
+##                print("Couldn't load", item)
+##                print(e)
+##except:
+##	print("Couldn't load")
 
 
 
 def schema(json, devId):
 
-    print('in function schema.....')
-    with urllib.request.urlopen('https://smartcity.rbccps.org/api/0.1.0/cat') as resp:
-        data = json.loads(resp.read().decode())
-        sensor_data = data['items']
-        data.clear()
+	print('in function schema.....')
+	with urllib.request.urlopen('https://smartcity.rbccps.org/api/0.1.0/cat') as resp:
+		data = json.loads(resp.read().decode())
+		sensor_data = data['items']
+		data.clear()
 
-    sensor_schema = {}
-    for i in range(0, len(sensor_data)):
-        sensor_schema[sensor_data[i]['id']] = sensor_data[i]['data_schema']
+	sensor_schema = {}
+	for i in range(0, len(sensor_data)):
+		sensor_schema[sensor_data[i]['id']] = sensor_data[i]['data_schema']
 
-    try :
-        validate(instance= json, schema= sensor_schema[devId])
-        validationFlag = True
+	try :
+		validate(instance= json, schema= sensor_schema[devId])
+		validationFlag = True
 
-    except Exception as e:
-        print('Given device data is not valid to its schema..')
-        validationFlag = False
+	except Exception as e:
+		print('Given device data is not valid to its schema..')
+		validationFlag = False
 
 
 
 def server():
     
-    context = zmq.Context()
-    socket = context.socket(zmq.SUB)
-    socket.setsockopt_string(zmq.SUBSCRIBE, '')
-    socket.bind("tcp://*:%s" % 5555)
-    while True:
-        message = socket.recv()
-        print("Received request  %s" %  message)
-        itemEntry = json.loads(str(message,'utf-8'))
-        itemId = itemEntry["id"]
-        modules[itemId] = {}
-        try:
-            from_spec = importlib.util.spec_from_file_location('from_' + itemId + '_pb2', adaptersDir + '/id_' + itemId + '/from_' + itemId + '_pb2.py')
-            from_mod = importlib.util.module_from_spec(from_spec)
-            from_spec.loader.exec_module(from_mod)
-            modules[itemId]["protoFrom"] = getattr(from_mod, itemEntry["protoFrom"])()
-            to_spec = importlib.util.spec_from_file_location('to_' + itemId + '_pb2', adaptersDir + '/id_' + itemId + '/to_' + itemId + '_pb2.py')
-            to_mod = importlib.util.module_from_spec(to_spec)
-            to_spec.loader.exec_module(to_mod)
-            modules[itemId]["protoTo"] = getattr(to_mod, itemEntry["protoTo"])()
+	context = zmq.Context()
+	socket = context.socket(zmq.SUB)
+	socket.setsockopt_string(zmq.SUBSCRIBE, '')
+	socket.bind("tcp://*:%s" % 5555)
+	while True:
+		message = socket.recv()
+		print("Received request  %s" %  message)
+		itemEntry = json.loads(str(message,'utf-8'))
+		itemId = itemEntry["id"]
+		modules[itemId] = {}
+		try:
+		from_spec = importlib.util.spec_from_file_location('from_' + itemId + '_pb2', adaptersDir + '/id_' + itemId + '/from_' + itemId + '_pb2.py')
+		from_mod = importlib.util.module_from_spec(from_spec)
+		from_spec.loader.exec_module(from_mod)
+		modules[itemId]["protoFrom"] = getattr(from_mod, itemEntry["protoFrom"])()
+		to_spec = importlib.util.spec_from_file_location('to_' + itemId + '_pb2', adaptersDir + '/id_' + itemId + '/to_' + itemId + '_pb2.py')
+		to_mod = importlib.util.module_from_spec(to_spec)
+		to_spec.loader.exec_module(to_mod)
+		modules[itemId]["protoTo"] = getattr(to_mod, itemEntry["protoTo"])()
         except:
-            print("Couldn't load objects")
-            print(sys.exc_traceback.tb_lineno)
+		print("Couldn't load objects")
+		print(sys.exc_traceback.tb_lineno)
 
 Process(target=server).start()
 
@@ -181,7 +181,7 @@ mwSub = AMQPPubSub(mwSubParams)
 poll=Celery('Poll', broker='redis://localhost/0')
 
 @poll.task
-async def poll_to_url(device_id):
+def poll_to_url(device_id):
 	while True:
 		requests.get(""+device_id)					#------!!!ADD APPROPRIATE URL!!!------
 		if r.status_code==requests.status.ok:
@@ -194,12 +194,27 @@ async def poll_to_url(device_id):
 
 def main():
 	#MAY CHANGE THIS TO USE APScheduler
-	loop = asyncio.get_event_loop()
-	mwSub_rc = mwSub.run()
-	gather_tasks = asyncio.gather(*[poll_to_url(device_id)])		#---!!!ADDING TASKS DYNAMICALLY, pass a list of fn() with IDs---
-	loop.run_until_complete(gather_tasks)
-	loop.close(
+##	loop = asyncio.get_event_loop()
+##	mwSub_rc = mwSub.run()
+##	gather_tasks = asyncio.gather(*[poll_to_url(device_id)])		#---!!!ADDING TASKS DYNAMICALLY, pass a list of fn() with IDs---
+##	loop.run_until_complete(gather_tasks)
+##	loop.close()
+	scheduler = AsyncIOScheduler
+	try:
+		with open(cwd + '/items.json', 'r') as f:
+			items = json.load(f)
+	        	for item in items.keys(): 
+		        	try:
+					scheduler.add_job(poll_to_url.delay(item), 'interval', '10')
+					scheduler.start()
+				except Exception as e:
+					print("Couldn't start process with ID", item)
+					print(e)
+	except:
+		print("Couldn't load processes")
+
+	asyncio.get_event_loop().run_forever()
 
 
 if __name__=="__main__":
-    main())
+    main()
