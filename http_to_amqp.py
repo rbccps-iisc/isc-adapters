@@ -13,8 +13,11 @@ from multiprocessing import Process
 from jsonschema import validate
 import ast
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+import adapter
 
 redConn = redis.StrictRedis(host='localhost', port=6379, db=0)
+
+scheduler = AsyncIOScheduler
 
 #------------------------------------------------------------------------------------------------------------------------
 
@@ -105,17 +108,16 @@ poll=Celery('Poll', broker='redis://localhost/0')
 @poll.task
 def poll_to_url(device_id):
 	while True:
-		requests.get(""+device_id)					#------!!!ADD APPROPRIATE URL!!!------
+		r=requests.get(""+device_id)					#------!!!ADD APPROPRIATE URL!!!------
 		if r.status_code==requests.status.ok:
 			http_dict=[device_id:r.text]					
 			redConn.push("incoming-messages", http_dict)
-			decode_push.delay()
+			adapter.decode_push.delay()
 			await asyncio.sleep(5)
 
 #-------------------------------------------------------------------------------------------------------------------------------
 
 def main():
-	scheduler = AsyncIOScheduler
 	try:
 		with open(cwd + '/items.json', 'r') as f:
 			items = json.load(f)
