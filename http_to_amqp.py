@@ -128,9 +128,6 @@ def poll_to_url(device_id):
 def main():
 	mwSub_rc = mwSub.run()
 	try:
-##		with open(cwd + '/items.json', 'r') as f:
-##			items = json.load(f)			#LOAD JSON OBJECTS
-##		for item in items.keys(): 			#LOAD DEVICES FROM LIST OF DEVICES
 		res=cln.find(projection={"id": TRUE, "_id":FALSE})
 		items=[]
 		for ids in resu:
@@ -146,6 +143,5 @@ def main():
 	scheduler.start()
 	asyncio.get_event_loop().run_forever()
 
-
 if __name__=="__main__":
-    main()
+	main()

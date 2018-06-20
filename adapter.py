@@ -110,8 +110,6 @@ ns_tx_topic = "application/1/node/{id}/tx"
 validationFlag = False
 
 try:
-##    with open(cwd + '/items.json', 'r') as f:
-##        items = json.load(f)		#LOAD JSON OBJECTS
         res=cln.find(projections={'_id':FALSE})
         for ids in res:
             items.update(ids)
@@ -220,8 +218,6 @@ nsSub = MQTTPubSub(nsSubParams)
 def main():
     mwSub_rc = mwSub.run()
     nsSub_rc = nsSub.run()
-
-
 
     while True:
         sleep(10)

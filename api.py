@@ -20,10 +20,7 @@ cln=db.devices                                          #COLLECTION OF DEVICES R
 workingDir = sys.path[0]
 items = {}
 
-#LOAD JSON OBJECTS
 try:
-    #f = open(workingDir + "/items.json", 'r')
-    #items = json.load(f)
     res=cln.find(projections={'_id':FALSE})
     for ids in res:
         items.update(ids)
@@ -87,8 +84,6 @@ class Register(Resource):
             items[id]=itemEntry
             itemEntry["id"] = id
             print(itemEntry)
-##            with open(workingDir + '/items.json', 'w') as jsFile:
-##                json.dump(items, jsFile)				#WRITE TO items.json
             cln.insert_one(items)
             if( flag == 2):
                 flag = 0
