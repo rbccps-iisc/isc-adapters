@@ -8,7 +8,6 @@ import zmq
 import json
 import importlib.machinery
 import os
-import sys
 from multiprocessing import Process
 from google.protobuf import json_format
 from google.protobuf.json_format import MessageToDict
@@ -164,7 +163,7 @@ def server():
     context = zmq.Context()
     socket = context.socket(zmq.SUB)
     socket.setsockopt_string(zmq.SUBSCRIBE, '')
-    socket.bind("tcp://*:%s" % 5555)
+    socket.bind("tcp://*:%s" % 1617)
     while True:
         message = socket.recv()
         print("Received request  %s" %  message)
@@ -219,7 +218,6 @@ nsSub = MQTTPubSub(nsSubParams)
 
 
 def main():
-
     mwSub_rc = mwSub.run()
     nsSub_rc = nsSub.run()
 

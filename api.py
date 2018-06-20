@@ -33,9 +33,9 @@ except:
 itemEntry = {}
 
 context = zmq.Context()
-print("Connecting to Adapter with ports %s" % 5555)
+print("Connecting to Adapter with ports %s" % 1617)
 socket = context.socket(zmq.PUB)
-socket.connect ("tcp://localhost:%s" % 5555)
+socket.connect ("tcp://localhost:%s" % 1617)
 
 #
 #   { "70b3d58ff01201":{ "protoTo" : "msgName", "protoFrom":"msgName" }}

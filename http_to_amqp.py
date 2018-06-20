@@ -6,9 +6,7 @@ import redis, hiredis
 from celery import Celery
 import zmq
 import json
-import os
 import base64
-import sys
 from multiprocessing import Process
 from jsonschema import validate
 import ast
@@ -18,7 +16,7 @@ import pymongo
 
 redConn = redis.StrictRedis(host='localhost', port=6379, db=0)
 
-scheduler = AsyncIOScheduler
+scheduler = AsyncIOScheduler()
 
 #----------------------------------------------------------------------------------------------------------------------#
 
@@ -80,7 +78,7 @@ def server():
 	context = zmq.Context()
 	socket = context.socket(zmq.SUB)
 	socket.setsockopt_string(zmq.SUBSCRIBE, '')
-	socket.bind("tcp://*:%s" % 5555)
+	socket.bind("tcp://*:%s" % 1617)
 	while True:
 		message = socket.recv()
 		print("Received request  %s" %  message)
@@ -124,11 +122,11 @@ def poll_to_url(device_id):
 			http_dict=[device_id:r.text]					
 			redConn.push("incoming-messages", http_dict)
 			adapter.decode_push.delay()
-			await asyncio.sleep(5)
 
 #-----------------------------------------------------------------------------------------------------------------------#
 
 def main():
+	mwSub_rc = mwSub.run()
 	try:
 ##		with open(cwd + '/items.json', 'r') as f:
 ##			items = json.load(f)			#LOAD JSON OBJECTS
