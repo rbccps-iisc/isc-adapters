@@ -14,8 +14,9 @@ class AMQPPubSub:
         self.exchange = params["exchange"]
         
         try:
-            credentials = pika.PlainCredentials(params['username'], params['password'])
-            parameters = pika.ConnectionParameters(self.url, self.port, '/', credentials)
+            #credentials = pika.PlainCredentials(params['username'], params['password'])
+            #parameters = pika.ConnectionParameters(self.url, self.port, '/', credentials)
+            parameters = pika.ConnectionParameters(self.url, self.port)
             self.connection = pika.BlockingConnection(parameters)
             self.channel = self.connection.channel()
             self.channel.exchange_declare(exchange=self.exchange,exchange_type='topic', durable=True)

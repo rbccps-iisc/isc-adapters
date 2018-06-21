@@ -21,7 +21,7 @@ workingDir = sys.path[0]
 items = {}
 
 try:
-    res=cln.find(projections={'_id':FALSE})
+    res=cln.find(projections={'_id':False})
     for ids in res:
         items.update(ids)
 except:

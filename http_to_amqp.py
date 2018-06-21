@@ -8,7 +8,6 @@ import zmq
 import json
 import base64
 from multiprocessing import Process
-from jsonschema import validate
 import ast
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import adapter
@@ -46,32 +45,9 @@ cln=db.devices						#COLLECTION OF DEVICES REGISTERED
 ##		data['fport'] = 1
 ##		print(body)
 ##		data['data'] = (base64.b64encode(body)).decode("utf-8")
-##		schema(json=data['data'], devId= _id)
 ##		#------!!!ADD code for 'post'ing to HTTP SERVER!!!------
 
 #---------------------------------------------------------------------------------------------------------------------#
-
-def schema(json, devId):
-
-	print('in function schema.....')
-	with urllib.request.urlopen('https://smartcity.rbccps.org/api/0.1.0/cat') as resp:
-		data = json.loads(resp.read().decode())
-		sensor_data = data['items']
-		data.clear()
-
-	sensor_schema = {}
-	for i in range(0, len(sensor_data)):
-		sensor_schema[sensor_data[i]['id']] = sensor_data[i]['data_schema']
-
-	try :
-		validate(instance= json, schema= sensor_schema[devId])
-		validationFlag = True
-
-	except Exception as e:
-		print('Given device data is not valid to its schema.')
-		validationFlag = False
-
-
 
 def server():
     
@@ -119,7 +95,12 @@ def poll_to_url(device_id):
 	while True:
 		r=requests.get(""+device_id)					#------!!!ADD APPROPRIATE URL!!!------
 		if r.status_code==requests.status.ok:
-			http_dict=[device_id:r.text]					
+			data = {}
+			data["reference"] = "a"
+			data["confirmed"] = False
+			data["fport"] = 1
+			data["data"] = r.text					
+			http_dict=[json.dumps(data):device_id]
 			redConn.push("incoming-messages", http_dict)
 			adapter.decode_push.delay()
 
@@ -128,7 +109,7 @@ def poll_to_url(device_id):
 def main():
 	mwSub_rc = mwSub.run()
 	try:
-		res=cln.find(projection={"id": TRUE, "_id":FALSE})
+		res=cln.find(projection={"id": True, "_id":False})
 		items=[]
 		for ids in resu:
 			items+list(ids.values())
