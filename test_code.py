@@ -7,6 +7,11 @@ import json
 from random import randrange
 from pymongo import MongoClient
 from time import sleep
+from flask import Flask
+
+#-------------------------------------------------------------------------------------
+
+flask_app = Flask(__name__)
 
 #-------------------------------------------------------------------------------------
 
@@ -16,7 +21,13 @@ mdb=mclient.devices_db
 
 mcln=mdb.devices
 
+hdb=mclient.devices_db_http
+
+hcln=hdb.devices
+
 mcln.delete_many({})
+
+hcln.delete_many({})
 
 #-------------------------------------------------------------------------------------
 
@@ -29,7 +40,11 @@ _id = '70b3d58ff0031de5'
 
 items={"70b3d58ff0031de5": {"protoTo": "_targetConfigurations", "protoFrom": "sensor_values", "id": "70b3d58ff0031de5"}}
 
-mcln.insert_one(items)
+#mcln.insert_one(items)
+
+http_items={"id":"70b3d58ff0031de5"}
+
+#hcln.insert_one(http_items)
 
 #-------------------------------------------------------------------------------------
 
@@ -57,28 +72,33 @@ client.connect("localhost", 1883, 60)
 ns_rx_topic = "application/1/node/{id}/rx"
 
 
-while True:
-    body={}
-    body["dataSamplingInstant"]=randrange(28)
-    body["caseTemperature"]=randrange(28)
-    body["powerConsumption"]=randrange(28)
-    body["luxOutput"]=randrange(28)
-    body["ambientLux"]=randrange(28)
-    body["batteryLevel"]=randrange(28)
-    body["slaveAlive"]=True
+@flask_app.route('/70b3d58ff0031de5')
+def post():
+    while True:
+        body={}
+        body["dataSamplingInstant"]=randrange(28)
+        body["caseTemperature"]=randrange(28)
+        body["powerConsumption"]=randrange(28)
+        body["luxOutput"]=randrange(28)
+        body["ambientLux"]=randrange(28)
+        body["batteryLevel"]=randrange(28)
+        body["slaveAlive"]=True
     
-    jbody=json.dumps(body)
-    print(jbody)
+        jbody=json.dumps(body).encode('utf-8')
+        thing=(base64.b64encode(jbody)).decode('utf-8')
+        return thing
+        
+        sleep(12)	
+##    mw_actuation_message = modules[_id]["protoFrom"]
+##    data = {}
+##    data["reference"] = "a"
+##    data["confirmed"] = False
+##    data["fport"] = 1
+##    json_format.Parse(jbody, mw_actuation_message, ignore_unknown_fields=False)
+##    data["data"] = (base64.b64encode(mw_actuation_message.SerializeToString())).decode("utf-8")
+##    client.publish(ns_rx_topic.replace("{id}", _id), json.dumps(data))
+##    print(json.dumps(data))
+##    sleep(6)
 
-    mw_actuation_message = modules[_id]["protoFrom"]
-    data = {}
-    data["reference"] = "a"
-    data["confirmed"] = False
-    data["fport"] = 1
-    json_format.Parse(jbody, mw_actuation_message, ignore_unknown_fields=False)
-    data["data"] = (base64.b64encode(mw_actuation_message.SerializeToString())).decode("utf-8")
-    client.publish(ns_rx_topic.replace("{id}", _id), json.dumps(data))
-    print(json.dumps(data))
-    sleep(6)
-
-
+if __name__=="__main__":
+    flask_app.run(debug=True)

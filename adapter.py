@@ -13,8 +13,17 @@ from google.protobuf import json_format
 from google.protobuf.json_format import MessageToDict
 import ast
 import pymongo
+import requests
+import asyncio
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+import threading
 
 redConn = redis.StrictRedis(host='localhost', port=6379, db=0)
+
+scheduler = AsyncIOScheduler()
+
+poll_url = "localhost:5000"
+#poll_url = ""			<SPECIFY MASTER URL FOR POLLING HERE>
 
 #----------------------------------------------------------------------------------------------------#
 
@@ -22,9 +31,13 @@ redConn = redis.StrictRedis(host='localhost', port=6379, db=0)
 
 client=pymongo.MongoClient()
 
-db=client.devices_db                                    #DB OF DEVICES
+mdb=client.devices_db_mq                                #DB OF DEVICES
 
-cln=db.devices                                          #COLLECTION OF DEVICES REGISTERED
+mcln=mdb.devices                                        #COLLECTION OF DEVICES REGISTERED
+
+hdb=client.devices_db_http
+
+hcln=hdb.devices
 
 #----------------------------------------------------------------------------------------------------#
 
@@ -40,20 +53,24 @@ def decode_push():
     dec_payload=list(mes_dict.values())[0]
     dec_device_id=list(mes_dict.keys())[0]
     print(mes_dict)
+    jsonData = json.loads(dec_payload)
+    if dec_device_id in http_items:
+        b64en=jsonData["data"]
+        decodedData = base64.b64decode(b64en.encode('utf-8'))
+        mwSub.publish(dec_device_id, json.dumps(decodedData.decode('utf-8')))
+    elif dec_device_id in modules:
     #code for proto decode
-    try:
-        if dec_device_id in modules:
-            ns_sensor_message = modules[dec_device_id]["protoFrom"]
-            jsonData = json.loads(dec_payload)
+        try:
             b64en=jsonData["data"]
             decodedData = base64.b64decode(b64en.encode('utf-8'))
+            ns_sensor_message = modules[dec_device_id]["protoFrom"]
             ns_sensor_message.ParseFromString(decodedData)
             mw_message = MessageToDict(ns_sensor_message)
             mwSub.publish(dec_device_id,json.dumps(mw_message))
             print("Published", mw_message)
-    except Exception as e:
-        print("DECODE ERROR")
-        print(e)
+        except Exception as e:
+            print("DECODE ERROR")
+            print(e)
 
 @celery_app.task
 def encode_push():
@@ -76,13 +93,29 @@ def encode_push():
         print("ENCODE ERROR")
         print(e)
 
+
+@celery_app.task
+def poll_to_url(device_id):
+    r=requests.get("http://"+poll_url+"/"+device_id)
+    if r.json is not None:
+        data = {}
+        data["reference"] = "a"
+        data["confirmed"] = False
+        data["fport"] = 1
+        data["data"] = r.text
+        print("GOT", data["data"])
+        http_dict={device_id:json.dumps(data)}
+        print("Pushed", http_dict)
+        redConn.rpush("incoming-messages", http_dict)
+        decode_push.delay()
+
 #----------------------------------------------------------------------------------------------------#
 
 #Defining various callbacks for MQTT and AMQP connections
 
 def MWSub_onMessage(ch, method, properties, body):
     print(body)
-    #Change according to wildcard entry 
+#    #Change according to wildcard entry 
 #    _id = method.routing_key.replace('_update','')
 #    am_dict={}
 #    am_dict={_id:body.decode('utf-8')}
@@ -117,19 +150,26 @@ adaptersDir = os.getcwd() + "/adapters"
 cwd = os.getcwd()
 
 modules = {}
+http_items = []
 items = {}
+
+http_items=["70b3d58ff0031de5"]							#NOT NEEDED DURING INTEGRATION. DELETE IT!
 
 ns_rx_topic = "application/1/node/{id}/rx"
 ns_tx_topic = "application/1/node/{id}/tx"
 
-validationFlag = False
-
-
 try:
-        res=cln.find(projection={'_id': False})
-        for ids in res:
+        mres=mcln.find(projection={'_id': False})
+        for ids in mres:
             items.update(ids)
-#---!!! NEXT LINE HAS BEEN ADDED FOR OFFLINE TESTING, ALONG WITH SEVERAL OTHERS. DELETE THEM DURING INTEGRATION !!!---
+
+        hres=hcln.find(projection={'_id':False})
+        for ids in hres:
+            if ids not in http_items:						#NOT NEEDED DURING INTEGRATION. DELETE IT!
+                http_items.append(ids["id"])
+#             http_items.append(ids["id"])
+        
+#NOT NEEDED DURING INTEGRATION. DELETE IT! NEXT LINE
         items={"70b3d58ff0031de5": {"protoTo": "_targetConfigurations", "protoFrom": "sensor_values", "id": "70b3d58ff0031de5"}}
         
         for item in list(items.keys()): 
@@ -163,18 +203,26 @@ def server():
         print("Received request  %s" %  message)
         itemEntry = json.loads(str(message,'utf-8'))
         itemId = itemEntry["id"]
-        modules[itemId] = {}
-        try:
-            from_spec = importlib.util.spec_from_file_location('from_' + itemId + '_pb2', adaptersDir + '/id_' + itemId + '/from_' + itemId + '_pb2.py')
-            from_mod = importlib.util.module_from_spec(from_spec)
-            from_spec.loader.exec_module(from_mod)
-            modules[itemId]["protoFrom"] = getattr(from_mod, itemEntry["protoFrom"])()
-            to_spec = importlib.util.spec_from_file_location('to_' + itemId + '_pb2', adaptersDir + '/id_' + itemId + '/to_' + itemId + '_pb2.py')
-            to_mod = importlib.util.module_from_spec(to_spec)
-            to_spec.loader.exec_module(to_mod)
-            modules[itemId]["protoTo"] = getattr(to_mod, itemEntry["protoTo"])()
-        except:
-            print("Couldn't load objects")
+        if len(list(itemEntry.keys()))==1:
+            http_items.append(itemId)
+            try:
+                scheduler.add_job(pool_to_url(itemId), 'interval', seconds = 10)
+            except:
+                print("Couldn't add job for ID", itemId, "after registration")
+        else:
+            modules[itemId] = {}
+            try:
+                from_spec = importlib.util.spec_from_file_location('from_' + itemId + '_pb2', adaptersDir + '/id_' + itemId + '/from_' + itemId + '_pb2.py')
+                from_mod = importlib.util.module_from_spec(from_spec)
+                from_spec.loader.exec_module(from_mod)
+                modules[itemId]["protoFrom"] = getattr(from_mod, itemEntry["protoFrom"])()
+            
+                to_spec = importlib.util.spec_from_file_location('to_' + itemId + '_pb2', adaptersDir + '/id_' + itemId + '/to_' + itemId + '_pb2.py')
+                to_mod = importlib.util.module_from_spec(to_spec)
+                to_spec.loader.exec_module(to_mod)
+                modules[itemId]["protoTo"] = getattr(to_mod, itemEntry["protoTo"])()
+            except:
+                print("Couldn't load objects")
 
 Process(target=server).start()
 
@@ -213,9 +261,29 @@ nsSub = MQTTPubSub(nsSubParams)
 #----------------------------------------------------------------------------------------------------#
 
 
+
 def main():
     mwSub_rc = mwSub.run()
     nsSub_rc = nsSub.run()
+   
+    try:
+        for devID in http_items:
+            try:
+                scheduler.add_job(func=poll_to_url.delay, args=[devID], trigger='interval', seconds = 10)
+                print("Added job for ID", devID)
+            except Exception as e:
+                print("Couldn't add process with ID", devID)
+                print(e)
+    except Exception as e:
+        print("Couldn't add processes")
+        print(e)
+    
+    try:
+        scheduler.start()
+        threading.Thread(asyncio.get_event_loop().run_forever()).start()
+    except Exception as e:
+        print("Couldn't add")
+        print(e)
 
     while True:
         sleep(10)

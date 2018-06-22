@@ -23,10 +23,13 @@ scheduler = AsyncIOScheduler()
 
 client=pymongo.MongoClient()
 
-db=client.devices_db					#DB OF DEVICES
+mdb=client.devices_db_mq                                #DB OF DEVICES
 
-cln=db.devices						#COLLECTION OF DEVICES REGISTERED
+mcln=mdb.devices                                        #COLLECTION OF DEVICES REGISTERED
 
+hdb=client.devices_db_http
+
+hcln=hdb.devices
 
 #----------------------------------------------------------------------------------------------------------------------#
 
@@ -49,6 +52,8 @@ cln=db.devices						#COLLECTION OF DEVICES REGISTERED
 
 #---------------------------------------------------------------------------------------------------------------------#
 
+http_items=[]
+
 def server():
     
 	context = zmq.Context()
@@ -60,7 +65,7 @@ def server():
 		print("Received request  %s" %  message)
 		itemEntry = json.loads(str(message,'utf-8'))
 		itemId = itemEntry["id"]
-		modules[itemId] = {}
+		http_items.append(itemId)
 		try:
 			scheduler.add_job(pool_to_url(itemId), 'interval', seconds = 10)
 		except:
@@ -93,27 +98,27 @@ poll=Celery('Poll', broker='redis://localhost/0')
 @poll.task
 def poll_to_url(device_id):
 	while True:
-		r=requests.get(""+device_id)					#------!!!ADD APPROPRIATE URL!!!------
-		if r.status_code==requests.status.ok:
+		r=requests.get("http://"+poll_url+"/"+device_id)					#------!!!ADD APPROPRIATE URL!!!------
+		if r.status_code==requests.codes.ok:
 			data = {}
 			data["reference"] = "a"
 			data["confirmed"] = False
 			data["fport"] = 1
 			data["data"] = r.text					
-			http_dict=[json.dumps(data):device_id]
+			http_dict=[device_id:json.dumps(data)]
 			redConn.push("incoming-messages", http_dict)
 			adapter.decode_push.delay()
 
 #-----------------------------------------------------------------------------------------------------------------------#
 
 def main():
+	poll_url = localhost
 	mwSub_rc = mwSub.run()
 	try:
-		res=cln.find(projection={"id": True, "_id":False})
-		items=[]
+		hres=hcln.find(projection={"id": True, "_id":False})
 		for ids in resu:
-			items+list(ids.values())
-		for devID in items:
+			http_items=http_items+list(ids.values())
+		for devID in http_items:
 			try:
 				scheduler.add_job(poll_to_url.delay(devID), 'interval', seconds = 10)
 			except Exception as e:

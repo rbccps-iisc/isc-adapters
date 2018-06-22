@@ -1,3 +1,5 @@
+#--------!!!!!!!!!!!! ISSUES: Addding both server registration and device registration !!!!!!!!!!!-------
+
 from flask import Flask, request
 from flask_restful import Resource, Api, reqparse
 import json
@@ -13,15 +15,17 @@ app = Flask(__name__)
 api = Api(app)
 
 client=pymongo.MongoClient()
-db=client.devices_db                                    #DB OF DEVICES
-cln=db.devices                                          #COLLECTION OF DEVICES REGISTERED
+mdb=client.devices_db
+mcln=mdb.devices
+hdb=client.devices_db_http
+hcln=hdb.devices
 
 
 workingDir = sys.path[0]
 items = {}
 
 try:
-    res=cln.find(projections={'_id':False})
+    res=mcln.find(projections={'_id':False})
     for ids in res:
         items.update(ids)
 except:
@@ -84,7 +88,7 @@ class Register(Resource):
             items[id]=itemEntry
             itemEntry["id"] = id
             print(itemEntry)
-            cln.insert_one(items)
+            mcln.insert_one(items)
             if( flag == 2):
                 flag = 0
                 socket.send_string(json.dumps(itemEntry))
