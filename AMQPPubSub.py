@@ -14,18 +14,17 @@ class AMQPPubSub:
         self.exchange = params["exchange"]
         
         try:
-            #credentials = pika.PlainCredentials(params['username'], params['password'])
-            #parameters = pika.ConnectionParameters(self.url, self.port, '/', credentials)
-            parameters = pika.ConnectionParameters(self.url, self.port)
+            credentials = pika.PlainCredentials(params['username'], params['password'])
+            parameters = pika.ConnectionParameters(self.url, self.port, '/', credentials)
             self.connection = pika.BlockingConnection(parameters)
             self.channel = self.connection.channel()
             self.channel.exchange_declare(exchange=self.exchange,exchange_type='topic', durable=True)
             result = self.channel.queue_declare(exclusive=True)
             self.queue_name = result.method.queue
             self.channel.queue_bind(exchange=self.exchange, queue=self.queue_name, routing_key='#')
-            print('Connected to  ', self.exchange)
+            print('Connected to', self.exchange)
         except:
-            print('Could not connect to  ', self.exchange)
+            print('Could not connect to', self.exchange)
 
         if ("onMessage" in params):
             self.on_message = params["onMessage"]

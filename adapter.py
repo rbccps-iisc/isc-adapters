@@ -22,8 +22,7 @@ redConn = redis.StrictRedis(host='localhost', port=6379, db=0)
 
 scheduler = AsyncIOScheduler()
 
-poll_url = "localhost:5000"
-#poll_url = ""			<SPECIFY MASTER URL FOR POLLING HERE>
+poll_url = ""			<SPECIFY MASTER URL FOR POLLING HERE>
 
 #----------------------------------------------------------------------------------------------------#
 
@@ -32,16 +31,14 @@ poll_url = "localhost:5000"
 client=pymongo.MongoClient()
 
 mdb=client.devices_db_mq                                #DB OF DEVICES
-
 mcln=mdb.devices                                        #COLLECTION OF DEVICES REGISTERED
 
 hdb=client.devices_db_http
-
 hcln=hdb.devices
 
 #----------------------------------------------------------------------------------------------------#
 
-#Code for celery tasks to be implemented when messages arrive to the MQTT topic(s)
+#Code for celery tasks
 
 celery_app=Celery('Adapter', broker='redis://localhost/0')
 
@@ -57,7 +54,7 @@ def decode_push():
     if dec_device_id in http_items:
         b64en=jsonData["data"]
         decodedData = base64.b64decode(b64en.encode('utf-8'))
-        mwSub.publish(dec_device_id, json.dumps(decodedData.decode('utf-8')))
+        mwSub.publish(dec_device_id+"_rx", json.dumps(decodedData.decode('utf-8')))
     elif dec_device_id in modules:
     #code for proto decode
         try:
@@ -86,9 +83,8 @@ def encode_push():
         data["fport"] = 1
         print(en_body)
         json_format.Parse(en_body, mw_actuation_message, ignore_unknown_fields=False)
-        data["data"] = base64.b64encode(mw_actuation_message.SerializeToString())
+        data["data"] = base64.b64encode(mw_actuation_message.SerializeToString()).decode('utf-8')
         nsSub.publish(ns_tx_topic.replace("{id}", _id), json.dumps(data))
-
     except Exception as e:
         print("ENCODE ERROR")
         print(e)
@@ -114,17 +110,17 @@ def poll_to_url(device_id):
 #Defining various callbacks for MQTT and AMQP connections
 
 def MWSub_onMessage(ch, method, properties, body):
-    print(body)
-#    #Change according to wildcard entry 
-#    _id = method.routing_key.replace('_update','')
-#    am_dict={}
-#    am_dict={_id:body.decode('utf-8')}
-#    redConn.rpush("outgoing-messages", am_dict)
-#    print("Received", am_dict)
-#    encode_push.delay()
-#_____!!!!!!ADD A CHECK FOR HTTP DEVICES UP THERE, IN CASE IT IS IMPLEMENTED IN FUTURE!!!!!!_____#
-
-
+    if '_tx' in method.routing_key:
+    #Change according to wildcard entry 
+        d_id = method.routing_key.replace('_update','')
+        _id=d_id[:len(d_id)-3]      
+        am_dict={}
+        am_dict={_id:body.decode('utf-8')}
+        redConn.rpush("outgoing-messages", am_dict)
+        print("Received", am_dict)
+        encode_push.delay()
+#_____!!!!!!ADD A CHECK AND METHOD FOR HTTP DEVICES UP THERE, IN CASE IT IS IMPLEMENTED IN FUTURE!!!!!!_____#
+        
 
 
 
@@ -153,40 +149,33 @@ modules = {}
 http_items = []
 items = {}
 
-http_items=["70b3d58ff0031de5"]							#NOT NEEDED DURING INTEGRATION. DELETE IT!
-
 ns_rx_topic = "application/1/node/{id}/rx"
 ns_tx_topic = "application/1/node/{id}/tx"
 
 try:
-        mres=mcln.find(projection={'_id': False})
-        for ids in mres:
-            items.update(ids)
+    mres=mcln.find(projection={'_id': False})
+    for ids in mres:
+        items.update(ids)
 
-        hres=hcln.find(projection={'_id':False})
-        for ids in hres:
-            if ids not in http_items:						#NOT NEEDED DURING INTEGRATION. DELETE IT!
-                http_items.append(ids["id"])
-#             http_items.append(ids["id"])
+    hres=hcln.find(projection={'_id':False})
+    for ids in hres:
+        http_items.append(ids["id"])
         
-#NOT NEEDED DURING INTEGRATION. DELETE IT! NEXT LINE
-        items={"70b3d58ff0031de5": {"protoTo": "_targetConfigurations", "protoFrom": "sensor_values", "id": "70b3d58ff0031de5"}}
-        
-        for item in list(items.keys()): 
-            try:
-                modules[item] = {}
-                from_spec = importlib.util.spec_from_file_location('from_' + item + '_pb2', adaptersDir + '/id_' + item + '/from_' + item + '_pb2.py')
-                from_mod = importlib.util.module_from_spec(from_spec)
-                from_spec.loader.exec_module(from_mod)
-                modules[item]["protoFrom"] = getattr(from_mod,items[item]["protoFrom"])()
+    for item in list(items.keys()): 
+        try:
+            modules[item] = {}
+            from_spec = importlib.util.spec_from_file_location('from_' + item + '_pb2', adaptersDir + '/id_' + item + '/from_' + item + '_pb2.py')
+            from_mod = importlib.util.module_from_spec(from_spec)
+            from_spec.loader.exec_module(from_mod)
+            modules[item]["protoFrom"] = getattr(from_mod,items[item]["protoFrom"])()
 
-                to_spec = importlib.util.spec_from_file_location('to_' + item + '_pb2', adaptersDir + '/id_' + item + '/to_' + item + '_pb2.py')
-                to_mod = importlib.util.module_from_spec(to_spec)
-                to_spec.loader.exec_module(to_mod)
-                modules[item]["protoTo"] = getattr(to_mod, items[item]["protoTo"])()
-            except Exception as e:
-                print("Couldn't load", item)
-                print(e)
+            to_spec = importlib.util.spec_from_file_location('to_' + item + '_pb2', adaptersDir + '/id_' + item + '/to_' + item + '_pb2.py')
+            to_mod = importlib.util.module_from_spec(to_spec)
+            to_spec.loader.exec_module(to_mod)
+            modules[item]["protoTo"] = getattr(to_mod, items[item]["protoTo"])()
+        except Exception as e:
+            print("Couldn't load", item)
+            print(e)
 except Exception as e:
     print("Couldn't load")
 
@@ -233,28 +222,25 @@ protosJson = {}
 #Connection parameters for AMQP and MQTT connections
 
 mwSubParams = {}
-#mwSubParams["url"] = "10.156.14.6"
-mwSubParams["url"] = "localhost"
+mwSubParams["url"] = "10.156.14.6"
 mwSubParams["port"] = 5672
 mwSubParams["timeout"] = 60
 mwSubParams["onMessage"] = MWSub_onMessage
-#mwSubParams["username"] = "admin"
-#mwSubParams["password"] = "admin@123"
+mwSubParams["username"] = "admin"
+mwSubParams["password"] = "admin@123"
 mwSubParams["exchange"] = "amq.topic"
 mwSub = AMQPPubSub(mwSubParams)
 
-#---!!! DON'T FORGET TO UNCOMMENT LINES IN AMQPPubSub.py FILE DURING INTEGRATION !!!---
 
 nsSubParams = {}
-#nsSubParams["url"] = "gateways.rbccps.org"
-nsSubParams["url"] = "localhost"
+nsSubParams["url"] = "gateways.rbccps.org"
 nsSubParams["port"] = 1883
 nsSubParams["timeout"] = 60
 nsSubParams["topic"] = "application/1/node/+/rx"
 nsSubParams["onMessage"] = NSSub_onMessage
 nsSubParams["onConnect"] = NSSub_onConnect
-#nsSubParams["username"] = "loraserver"
-#nsSubParams["password"] = "loraserver"
+nsSubParams["username"] = "loraserver"
+nsSubParams["password"] = "loraserver"
 nsSub = MQTTPubSub(nsSubParams)
 
 
