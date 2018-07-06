@@ -100,7 +100,7 @@ def poll_to_url(device_id):
         data["fport"] = 1
         data["data"] = r.text
         print("GOT", data["data"])
-        http_dict = {device_id: json.dumps(data)}
+        http_dict = {device_id:json.dumps(data)}
         print("Pushed", http_dict)
         redConn.rpush("incoming-messages", http_dict)
         decode_push.delay()
@@ -116,7 +116,7 @@ def MWSub_onMessage(ch, method, properties, body):
         d_id = method.routing_key.replace('_update', '')
         _id = d_id[:len(d_id)-3]
         am_dict = {}
-        am_dict = {_id: body.decode('utf-8')}
+        am_dict = {_id:body.decode('utf-8')}
         redConn.rpush("outgoing-messages", am_dict)
         print("Received", am_dict)
         encode_push.delay()
@@ -154,11 +154,19 @@ try:
     mres = mcln.find(projection={'_id': False})
     for ids in mres:
         items.update(ids)
+except Exception as e:
+    print("Couldn't load MQTT lists")
+    print(e)
 
+try:
     hres = hcln.find(projection={'_id': False})
     for ids in hres:
         http_items.update(ids)
+except Exception as e:
+    print("Couldn't load HTTP lists")
+    print(e)
 
+try:
     for item in list(items.keys()):
         try:
             modules[item] = {}
@@ -198,12 +206,11 @@ try:
     scheduler.start()
     threading.Thread(asyncio.get_event_loop().run_forever()).start()
 except Exception as e:
-    print("Couldn't add")
+    print("Couldn't start scheduler")
     print(e)
 
 
 def server():
-
     context = zmq.Context()
     socket = context.socket(zmq.SUB)
     socket.setsockopt_string(zmq.SUBSCRIBE, '')
@@ -213,9 +220,10 @@ def server():
         print("Received request  %s" % message)
         itemEntry = json.loads(str(message, 'utf-8'))
         itemId = itemEntry["id"]
-        if len(list(itemEntry.keys())) == 8:
+        
+	if len(list(itemEntry.keys())) == 8:
             modules[itemId]={}
-	    http_items.update(itemEntry)
+	    http_items.update({itemId:itemEntry})
             try:
                 scheduler.add_job(pool_to_url(itemId), 'interval', seconds=10)
             except:
@@ -224,8 +232,7 @@ def server():
         else:
             modules[itemId] = {}
             try:
-                from_spec = importlib.util.spec_from_file_location(
-                    'from_' + itemId + '_pb2', adaptersDir + '/id_' + itemId + '/from_' + itemId + '_pb2.py')
+                from_spec = importlib.util.spec_from_file_location('from_' + itemId + '_pb2', adaptersDir + '/id_' + itemId + '/from_' + itemId + '_pb2.py')
                 from_mod = importlib.util.module_from_spec(from_spec)
                 from_spec.loader.exec_module(from_mod)
                 modules[itemId]["protoFrom"] = getattr(from_mod, itemEntry["protoFrom"])()

@@ -31,22 +31,25 @@ try:
     res = mcln.find(projections={'_id': False})
     for ids in res:
         items.update(ids)
-except:
+except Exception as e:
     print("Couldn't load MQTT list")
+    print(e)
 
 try:
     res = hcln.find(projections={'_id': False})
     for ids in res:
         items.update(ids)
-except:
+except Exception as e:
     print("Couldn't load HTTP list")
+    print(e)
 
 try:
     res = scln.find(projections={'_id': False})
     for ids in res:
         servers.update(ids)
-except:
+except Exception as e:
     print("Couldn't load servers list")
+    print(e)
 
 
 itemEntry = {}
@@ -129,7 +132,7 @@ class DeviceRegister(Resource):
                 items[id] = itemEntry
                 itemEntry["id"] = id
                 print(itemEntry)
-                mcln.insert_one(json.dumps({id: itemEntry}))
+                mcln.insert_one(json.dumps({id:itemEntry}))
 
             elif(catJSON["items"][0]["server_config"]["protocol"] == ("http" or "HTTP" or "https" or "HTTPS")):
 
@@ -157,7 +160,7 @@ class DeviceRegister(Resource):
                 items[id] = itemEntry
                 itemEntry["id"] = id
                 print(itemEntry)
-                hcln.insert_one(json.dumps({id: itemEntry}))
+                hcln.insert_one(json.dumps({id:itemEntry}))
 
             if(flag == 3):
                 flag = 0
@@ -175,7 +178,7 @@ class ServerRegister(Resource):
         catJSON = request.get_json()
         server_name = catJSON["server_name"]
         servers.update({server_name: catJSON})
-        scln.insert_one(json.dumps{server_name: catJSON})
+        scln.insert_one(json.dumps{server_name:catJSON})
 
 
 api.add_resource(ServerRegister, '/server_register')
