@@ -1,3 +1,16 @@
+'''
+ISSUES:
+    
+    General Issues:
+[]	1. Bind get response body to automate
+[x]	2. Usage of API methods
+    
+    Bosch Issues:
+[]	1. Bind new API mapping with new API methods
+[]	2. Method for identifying different devices and a probable way to store useful details
+
+'''
+
 from MQTTPubSub import MQTTPubSub
 from AMQPPubSub import AMQPPubSub
 from time import sleep
@@ -22,6 +35,37 @@ import threading
 redConn = redis.StrictRedis(host='localhost', port=6379, db=0)
 
 scheduler = AsyncIOScheduler()
+
+#----------------------------------------------------------------------------------------------------#
+
+#Initialisation of Bosch Climo APIs
+
+properties = ["SENS_LIGHT", "SENS_AIR_PRESSURE", "SENS_TEMPERATURE", "SENS_CARBON_DIOXIDE",
+"SENS_RELATIVE_HUMIDITY", "SENS_SOUND", "SENS_NITRIC_OXIDE", "SENS_ULTRA_VIOLET", "SENS_PM2P5",
+"SENS_PM10", "SENS_NITROGEN_DIOXIDE", "SENS_CARBON_MONOXIDE", "SENS_SULPHUR_DIOXIDE", "SENS_OZONE"]
+
+bosch_auth_url = "http://52.28.187.167/services/api/v1/users/login"
+
+bosch_auth_headers = {"Content-Type":"application/json", "Accept":"application/json", "api_key":"apiKey"}
+
+bosch_auth_payload = {"password":"Q2xpbW9AOTAz", "username":"SUlTQ19CQU5HQUxPUkU="}
+
+auth_res = requests.post(url = bosch_auth_url, headers = bosch_auth_headers, data = json.dumps(bosch_auth_payload))
+
+authToken = auth_res.json()["authToken"]
+OrgKey = auth_res.json()["OrgKey"]
+
+
+bosch_thing_url = "http://52.28.187.167/services/api/v1/getAllthings"
+
+bosch_thing_headers = {"Accept":"application/json", "api_key":"apiKey", "Authorization":authToken, "X-OrganizationKey":OrgKey}
+
+thing_res = requests.get(url = bosch_thing_url, headers = bosch_thing_headers)
+
+thingKey = thing_res.json()["result"][0]["thingKey"]
+
+
+poll_url = "http://52.28.187.167/services/api/v1/property/" + thingKey + "/{propertyKey}/1m"
 
 #----------------------------------------------------------------------------------------------------#
 
@@ -92,18 +136,20 @@ def encode_push():
 
 @celery_app.task
 def poll_to_url(device_id):
-    r = requests.get(http_items[device_id]["getAdd"])
-    if r.json is not None:
-        data = {}
-        data["reference"] = "a"
-        data["confirmed"] = False
-        data["fport"] = 1
-        data["data"] = r.text
-        print("GOT", data["data"])
-        http_dict = {device_id:json.dumps(data)}
-        print("Pushed", http_dict)
-        redConn.rpush("incoming-messages", http_dict)
-        decode_push.delay()
+    sens_data = {}
+    for p in properties:
+        r = requests.get(url=poll_url.replace("{propertyKey}", p), headers = bosch_thing_headers)
+	sens_data.update({p:r.json()["result"]["values"]["value"]})
+    data = {}
+    data["reference"] = "a"
+    data["confirmed"] = False
+    data["fport"] = 1
+    data["data"] = json.dumps(sens_data)
+    print("GOT", data["data"])
+    http_dict = {device_id:json.dumps(data)}
+    print("Pushed", http_dict)
+    redConn.rpush("incoming-messages", http_dict)
+    decode_push.delay()
 
 #----------------------------------------------------------------------------------------------------#
 
@@ -139,7 +185,7 @@ def NSSub_onMessage(client, userdata, msg):
 
 #----------------------------------------------------------------------------------------------------#
 
-# To import proto files to the code at startup
+# Initialization at startup
 
 
 adaptersDir = os.getcwd() + "/adapters"
@@ -191,7 +237,7 @@ try:
     for ids in http_items:
 	devID = ids["id"]
         try:
-            scheduler.add_job(func=poll_to_url.delay, args=[devID], trigger='interval', seconds=10)
+            scheduler.add_job(func=poll_to_url.delay, args=[devID], trigger='interval', seconds=60)
             print("Added job for ID", devID)
         except Exception as e:
             print("Couldn't add process with ID", devID)
@@ -225,7 +271,7 @@ def server():
             modules[itemId]={}
 	    http_items.update({itemId:itemEntry})
             try:
-                scheduler.add_job(pool_to_url(itemId), 'interval', seconds=10)
+                scheduler.add_job(pool_to_url(itemId), 'interval', seconds=60)
             except:
                 print("Couldn't add job for ID", itemId, "after registration")
 	    
