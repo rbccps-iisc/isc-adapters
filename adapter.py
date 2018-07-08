@@ -1,14 +1,10 @@
 '''
-ISSUES:
-    
-    General Issues:
-[]	1. Bind get response body to automate
-[x]	2. Usage of API methods
-    
-    Bosch Issues:
-[]	1. Bind new API mapping with new API methods
-[]	2. Method for identifying different devices and a probable way to store useful details
+ISSUES: Nothing open. Some properties reserved for future usage. Catalog files to be updated.
 
+    Catalog issues:
+	1. Add ["items"][0]["server_config"]["protocol"] in all devices to indicate protocol used for communication
+	2. Add ["items"][0]["server_config"]["server_name"] in all devices to indicate server used for communication
+	
 '''
 
 from MQTTPubSub import MQTTPubSub
@@ -31,6 +27,7 @@ import requests
 import asyncio
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import threading
+from jsontraverse.parser import JsonTraverseParser
 
 redConn = redis.StrictRedis(host='localhost', port=6379, db=0)
 
@@ -44,12 +41,10 @@ properties = ["SENS_LIGHT", "SENS_AIR_PRESSURE", "SENS_TEMPERATURE", "SENS_CARBO
 "SENS_RELATIVE_HUMIDITY", "SENS_SOUND", "SENS_NITRIC_OXIDE", "SENS_ULTRA_VIOLET", "SENS_PM2P5",
 "SENS_PM10", "SENS_NITROGEN_DIOXIDE", "SENS_CARBON_MONOXIDE", "SENS_SULPHUR_DIOXIDE", "SENS_OZONE"]
 
+
 bosch_auth_url = "http://52.28.187.167/services/api/v1/users/login"
-
 bosch_auth_headers = {"Content-Type":"application/json", "Accept":"application/json", "api_key":"apiKey"}
-
 bosch_auth_payload = {"password":"Q2xpbW9AOTAz", "username":"SUlTQ19CQU5HQUxPUkU="}
-
 auth_res = requests.post(url = bosch_auth_url, headers = bosch_auth_headers, data = json.dumps(bosch_auth_payload))
 
 authToken = auth_res.json()["authToken"]
@@ -57,9 +52,7 @@ OrgKey = auth_res.json()["OrgKey"]
 
 
 bosch_thing_url = "http://52.28.187.167/services/api/v1/getAllthings"
-
 bosch_thing_headers = {"Accept":"application/json", "api_key":"apiKey", "Authorization":authToken, "X-OrganizationKey":OrgKey}
-
 thing_res = requests.get(url = bosch_thing_url, headers = bosch_thing_headers)
 
 thingKey = thing_res.json()["result"][0]["thingKey"]
@@ -88,7 +81,6 @@ celery_app = Celery('Adapter', broker='redis://localhost/0')
 
 @celery_app.task
 def decode_push():
-    global red
     mes_pay = redConn.lpop("incoming-messages")
     mes_dict = ast.literal_eval(mes_pay.decode('utf-8'))
     dec_payload = list(mes_dict.values())[0]
@@ -97,7 +89,7 @@ def decode_push():
     if dec_device_id in http_items:
         b64en = jsonData["data"]
         decodedData = base64.b64decode(b64en.encode('utf-8'))
-        mwSub.publish(dec_device_id+'_tx', json.dumps(decodedData.decode('utf-8')))	    ## tx for device transmission
+        mwSub.publish(dec_device_id+'.tx', json.dumps(decodedData.decode('utf-8')))	    ## tx for device transmission
     elif dec_device_id in items:
         # code for proto decode
         try:
@@ -106,7 +98,7 @@ def decode_push():
             ns_sensor_message = modules[dec_device_id]["protoFrom"]
             ns_sensor_message.ParseFromString(decodedData)
             mw_message = MessageToDict(ns_sensor_message)
-            mwSub.publish(dec_device_id+'_tx', json.dumps(mw_message))
+            mwSub.publish(dec_device_id+'.tx', json.dumps(mw_message))
             print("Published", mw_message)
         except Exception as e:
             print("DECODE ERROR")
@@ -115,7 +107,6 @@ def decode_push():
 
 @celery_app.task
 def encode_push():
-    global red
     out_dict = ast.literal_eval(redConn.lpop("outgoing-messages").decode('utf-8'))
     en_body = (list(out_dict.values())[0])
     en_id = list(out_dict.keys())[0]
@@ -125,10 +116,9 @@ def encode_push():
         data["reference"] = "a"
         data["confirmed"] = False
         data["fport"] = 1
-        print(en_body)
         json_format.Parse(en_body, mw_actuation_message, ignore_unknown_fields=False)
         data["data"] = base64.b64encode(mw_actuation_message.SerializeToString()).decode('utf-8')
-        nsSub.publish(items[en_id]["getAdd"], json.dumps(data))
+        nsSub.publish(items[en_id]["postAdd"], json.dumps(data))
     except Exception as e:
         print("ENCODE ERROR")
         print(e)
@@ -138,18 +128,26 @@ def encode_push():
 def poll_to_url(device_id):
     sens_data = {}
     for p in properties:
+        sleep(1)
         r = requests.get(url=poll_url.replace("{propertyKey}", p), headers = bosch_thing_headers)
-	sens_data.update({p:r.json()["result"]["values"]["value"]})
-    data = {}
-    data["reference"] = "a"
-    data["confirmed"] = False
-    data["fport"] = 1
-    data["data"] = json.dumps(sens_data)
-    print("GOT", data["data"])
-    http_dict = {device_id:json.dumps(data)}
-    print("Pushed", http_dict)
-    redConn.rpush("incoming-messages", http_dict)
-    decode_push.delay()
+	parser = JsonTraverseParser(r.json())
+        if(parser.traverse("result.values") is not None):
+	    sens_data.update({p:parser.traverse(http_items[device_id]["getDataField"])})
+        else:
+            sens_data.update({p:None})    
+    try:
+	data = {}
+	data["reference"] = "a"
+	data["confirmed"] = False
+	data["fport"] = 1
+	data["data"] = json.dumps(sens_data)
+	http_dict = {device_id:json.dumps(data)}
+	print("Pushed", http_dict)
+	redConn.rpush("incoming-messages", http_dict)
+	decode_push.delay()
+    except Exception as e:
+	print("Couldn't add HTTP data")
+	print(e)
 
 #----------------------------------------------------------------------------------------------------#
 
@@ -157,10 +155,9 @@ def poll_to_url(device_id):
 
 
 def MWSub_onMessage(ch, method, properties, body):
-    if '_rx' in method.routing_key:						## rx for device reception
+    if '.rx' in method.routing_key:						## rx for device reception
         # Change according to wildcard entry
-        d_id = method.routing_key.replace('_update', '')
-        _id = d_id[:len(d_id)-3]
+        _id = method.routing_key.replace('.rx', '')
         am_dict = {}
         am_dict = {_id:body.decode('utf-8')}
         redConn.rpush("outgoing-messages", am_dict)
@@ -177,8 +174,11 @@ def NSSub_onConnect(client, userdata, flags, rc):
 
 def NSSub_onMessage(client, userdata, msg):
     in_str = json.dumps(json.loads(msg.payload.decode('utf-8')))
+    mq_parser = JsonTraverseParser(in_str)
+    dev_id = msg.topic.split('/')[3]
+    _str = mq_parser.traverse(items[dev_id]["getDataField"])
     mq_dict = {}
-    mq_dict = {msg.topic.split('/')[3]: in_str}
+    mq_dict = {dev_id: _str}
     redConn.rpush("incoming-messages", mq_dict)
     print("Pushed", mq_dict)
     decode_push.delay()
@@ -197,17 +197,17 @@ http_items = {}
 items = {}
 
 try:
-    mres = mcln.find(projection={'_id': False})
-    for ids in mres:
-        items.update(ids)
+    mres = mcln.find(projection={"_id": False})
+    for obj in mres:
+        items.update(obj)
 except Exception as e:
     print("Couldn't load MQTT lists")
     print(e)
 
 try:
-    hres = hcln.find(projection={'_id': False})
-    for ids in hres:
-        http_items.update(ids)
+    hres = hcln.find(projection={"_id": False})
+    for obj in hres:
+        http_items.update(obj)
 except Exception as e:
     print("Couldn't load HTTP lists")
     print(e)
@@ -234,13 +234,12 @@ except Exception as e:
 
 
 try:
-    for ids in http_items:
-	devID = ids["id"]
+    for ids in list(http_items.keys()):
         try:
-            scheduler.add_job(func=poll_to_url.delay, args=[devID], trigger='interval', seconds=60)
-            print("Added job for ID", devID)
+            scheduler.add_job(func=poll_to_url.delay, args=[ids], trigger='interval', seconds=60)
+            print("Added job for ID", ids)
         except Exception as e:
-            print("Couldn't add process with ID", devID)
+            print("Couldn't add process with ID", ids)
             print(e)
 
 except Exception as e:
@@ -268,7 +267,6 @@ def server():
         itemId = itemEntry["id"]
         
 	if len(list(itemEntry.keys())) == 8:
-            modules[itemId]={}
 	    http_items.update({itemId:itemEntry})
             try:
                 scheduler.add_job(pool_to_url(itemId), 'interval', seconds=60)

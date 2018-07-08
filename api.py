@@ -113,6 +113,7 @@ class DeviceRegister(Resource):
                 serverConfig = json.loads(servers[serverName])
                 try:
                     itemEntry["serverName"] = serverConfig["server_name"]
+                    itemEntry["serverID"] = serverConfig["server_id"]
                     itemEntry["getAdd"] = serverConfig["get_address"].replace(
                         "{id}", id)
                     itemEntry["postAdd"] = serverConfig["post_address"].replace(
@@ -124,6 +125,10 @@ class DeviceRegister(Resource):
                     itemEntry["postReqBody"] = serverConfig["post_request_body"].replace(
                         "{id}", id)
                     itemEntry["postRespBody"] = serverConfig["post_response_body"].replace(
+                        "{id}", id)
+                    itemEntry["getDataField"] = serverConfig["get_data_field"].replace(
+                        "{id}", id)
+                    itemEntry["postDataField"] = serverConfig["post_data_field"].replace(
                         "{id}", id)
                     flag = flag + 1
                 except:
@@ -141,6 +146,7 @@ class DeviceRegister(Resource):
                 serverConfig = json.loads(servers[serverName])
                 try:
                     itemEntry["serverName"] = serverConfig["server_name"]
+                    itemEntry["serverID"] = serverConfig["server_id"]
                     itemEntry["getAdd"] = serverConfig["get_address"].replace(
                         "{id}", id)
                     itemEntry["postAdd"] = serverConfig["post_address"].replace(
@@ -152,6 +158,10 @@ class DeviceRegister(Resource):
                     itemEntry["postReqBody"] = serverConfig["post_request_body"].replace(
                         "{id}", id)
                     itemEntry["postRespBody"] = serverConfig["post_response_body"].replace(
+                        "{id}", id)
+                    itemEntry["getDataField"] = serverConfig["get_data_field"].replace(
+                        "{id}", id)
+                    itemEntry["postDataField"] = serverConfig["post_data_field"].replace(
                         "{id}", id)
                     flag = 3
                 except:
