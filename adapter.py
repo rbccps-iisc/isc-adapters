@@ -132,14 +132,11 @@ def poll_to_url(device_id):
         r = requests.get(url=poll_url.replace("{propertyKey}", p), headers = bosch_thing_headers)
 	parser = JsonTraverseParser(r.json())
         if(parser.traverse("result.values") is not None):
-	    sens_data.update({p:parser.traverse(http_items[device_id]["getDataField"])})
+	    sens_data.update({p:parser.traverse(http_items[device_id]["getDataField"])})	    ##getDataField = results.values.0.value
         else:
             sens_data.update({p:None})    
     try:
 	data = {}
-	data["reference"] = "a"
-	data["confirmed"] = False
-	data["fport"] = 1
 	data["data"] = json.dumps(sens_data)
 	http_dict = {device_id:json.dumps(data)}
 	print("Pushed", http_dict)
