@@ -2,9 +2,14 @@
 ISSUES: Nothing open. Some properties reserved for future usage. Catalog files to be updated.
 
     Catalog issues:
-	1. Add ["items"][0]["server_config"]["protocol"] in all devices to indicate protocol used for communication
-	2. Add ["items"][0]["server_config"]["server_name"] in all devices to indicate server used for communication
-	
+[]	1. Add ["items"][0]["server_config"]["protocol"] in all devices to indicate protocol used for communication
+[]	2. Add ["items"][0]["server_config"]["server_name"] in all devices to indicate server used for communication
+[]	3. Add ["items"][0]["device_bosch_api"] in HTTP devices to indicate the API information used for Bosch API validation (7 items inside this)
+
+    Code:
+[]	1. Modularise base64+proto, etc
+[x]	2. APIs for Bosch
+    
 '''
 
 from MQTTPubSub import MQTTPubSub
@@ -37,28 +42,28 @@ scheduler = AsyncIOScheduler()
 
 #Initialisation of Bosch Climo APIs
 
-properties = ["SENS_LIGHT", "SENS_AIR_PRESSURE", "SENS_TEMPERATURE", "SENS_CARBON_DIOXIDE",
-"SENS_RELATIVE_HUMIDITY", "SENS_SOUND", "SENS_NITRIC_OXIDE", "SENS_ULTRA_VIOLET", "SENS_PM2P5",
-"SENS_PM10", "SENS_NITROGEN_DIOXIDE", "SENS_CARBON_MONOXIDE", "SENS_SULPHUR_DIOXIDE", "SENS_OZONE"]
+dThingKey = {}
+
+def bosch_init(dev_id):
+    
+    global dThingKey
+
+    bosch_auth_url = http_items[dev_id]["authUrl"]				    ##"http://52.28.187.167/services/api/v1/users/login"
+    bosch_auth_headers = http_items[dev_id]["authHeaders"]			    ##{"Content-Type":"application/json", "Accept":"application/json", "api_key":"apiKey"}
+    bosch_auth_payload = http_items[dev_id]["authCred"]			    ##{"password":"Q2xpbW9AOTAz", "username":"SUlTQ19CQU5HQUxPUkU="}
+    auth_res = requests.post(url = bosch_auth_url, headers = bosch_auth_headers, data = json.dumps(bosch_auth_payload))
+
+    authToken = auth_res.json()["authToken"]
+    OrgKey = auth_res.json()["OrgKey"]
 
 
-bosch_auth_url = "http://52.28.187.167/services/api/v1/users/login"
-bosch_auth_headers = {"Content-Type":"application/json", "Accept":"application/json", "api_key":"apiKey"}
-bosch_auth_payload = {"password":"Q2xpbW9AOTAz", "username":"SUlTQ19CQU5HQUxPUkU="}
-auth_res = requests.post(url = bosch_auth_url, headers = bosch_auth_headers, data = json.dumps(bosch_auth_payload))
+    bosch_thing_url = http_items[dev_id]["thingUrl"]				    ##"http://52.28.187.167/services/api/v1/getAllthings"
+    bosch_thing_headers = http_items[dev_id]["thingHeaders"]			    ##{"Accept":"application/json", "api_key":"apiKey", "Authorization":authToken, "X-OrganizationKey":OrgKey}
+    thing_res = requests.get(url = bosch_thing_url, headers = bosch_thing_headers)
 
-authToken = auth_res.json()["authToken"]
-OrgKey = auth_res.json()["OrgKey"]
-
-
-bosch_thing_url = "http://52.28.187.167/services/api/v1/getAllthings"
-bosch_thing_headers = {"Accept":"application/json", "api_key":"apiKey", "Authorization":authToken, "X-OrganizationKey":OrgKey}
-thing_res = requests.get(url = bosch_thing_url, headers = bosch_thing_headers)
-
-thingKey = thing_res.json()["result"][0]["thingKey"]
-
-
-poll_url = "http://52.28.187.167/services/api/v1/property/" + thingKey + "/{propertyKey}/1m"
+    dev_thingKey = thing_res.json()["result"][0]["thingKey"]
+    
+    dThingKey.update({dev_id:dev_thingKey})
 
 #----------------------------------------------------------------------------------------------------#
 
@@ -66,8 +71,8 @@ poll_url = "http://52.28.187.167/services/api/v1/property/" + thingKey + "/{prop
 
 client = pymongo.MongoClient()
 
-mdb = client.devices_db_mq	    # DB OF DEVICES
-mcln = mdb.devices		    # COLLECTION OF DEVICES REGISTERED
+mdb = client.devices_db_mq	    
+mcln = mdb.devices		    
 
 hdb = client.devices_db_http
 hcln = hdb.devices
@@ -126,12 +131,21 @@ def encode_push():
 
 @celery_app.task
 def poll_to_url(device_id):
+    global dThingKey
     sens_data = {}
+    thingKey = dThingKey[device_id]
+
+    ##properties = ["SENS_LIGHT", "SENS_AIR_PRESSURE", "SENS_TEMPERATURE", "SENS_CARBON_DIOXIDE", "SENS_RELATIVE_HUMIDITY", "SENS_SOUND", "SENS_NITRIC_OXIDE", "SENS_ULTRA_VIOLET", "SENS_PM2P5", "SENS_PM10", "SENS_NITROGEN_DIOXIDE", "SENS_CARBON_MONOXIDE", "SENS_SULPHUR_DIOXIDE", "SENS_OZONE"]
+
+    properties = http_items[device_id]["properties"]
+
+    poll_url = http_items[device_id]["pollUrl"].replace("{thingKey}", thingKey)	    ##"http://52.28.187.167/services/api/v1/property/{thingKey}/{propertyKey}/1m"
+    
     for p in properties:
         sleep(1)
-        r = requests.get(url=poll_url.replace("{propertyKey}", p), headers = bosch_thing_headers)
+        r = requests.get(url=poll_url.replace("{propertyKey}", p), headers = http_items[device_id]["thing_headers"])
 	parser = JsonTraverseParser(r.json())
-        if(parser.traverse("result.values") is not None):
+        if(parser.traverse(http_items[device_id]["getDataField"]) is not None):
 	    sens_data.update({p:parser.traverse(http_items[device_id]["getDataField"])})	    ##getDataField = results.values.0.value
         else:
             sens_data.update({p:None})    
@@ -233,6 +247,11 @@ except Exception as e:
 try:
     for ids in list(http_items.keys()):
         try:
+	    bosch_init(ids)
+	except Exception as e:
+	    print("Couldn't initialise API for ID", ids)
+	    print(e)
+	try:
             scheduler.add_job(func=poll_to_url.delay, args=[ids], trigger='interval', seconds=60)
             print("Added job for ID", ids)
         except Exception as e:
@@ -263,12 +282,18 @@ def server():
         itemEntry = json.loads(str(message, 'utf-8'))
         itemId = itemEntry["id"]
         
-	if len(list(itemEntry.keys())) == 8:
+	if len(list(itemEntry.keys())) == 17:
 	    http_items.update({itemId:itemEntry})
+	    try:
+		bosch_init(itemId)
+	    except Exception as e:
+		print("Couldn't initialise API for ID", itemId, "after registration")
+		print(e)
             try:
                 scheduler.add_job(pool_to_url(itemId), 'interval', seconds=60)
-            except:
+            except Exception as e:
                 print("Couldn't add job for ID", itemId, "after registration")
+		print(e)
 	    
         else:
             modules[itemId] = {}
@@ -283,8 +308,9 @@ def server():
                 to_spec.loader.exec_module(to_mod)
                 modules[itemId]["protoTo"] = getattr(to_mod, itemEntry["protoTo"])()
 
-            except:
+            except Exception as e:
                 print("Couldn't load objects")
+		print(e)
 
 
 Process(target=server).start()

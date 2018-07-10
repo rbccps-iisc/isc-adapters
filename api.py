@@ -91,8 +91,9 @@ class DeviceRegister(Resource):
                                  adapterRoot + ' ' + adapterRoot + '/to_' + id + '.proto', shell=True)
                     itemEntry["protoTo"] = catJSON["items"][0]["serialization_to_device"]["schema_ref"]["mainMessageName"]
                     flag = flag + 1
-                except:
+                except Exception as e:
                     print("Couldn't get *To* Proto")
+		    print(e)
 
                 try:
                     protoFrom = catJSON["items"][0]["serialization_from_device"]["schema_ref"]
@@ -105,8 +106,9 @@ class DeviceRegister(Resource):
                                  adapterRoot + ' ' + adapterRoot + '/from_' + id + '.proto', shell=True)
                     itemEntry["protoFrom"] = catJSON["items"][0]["serialization_from_device"]["schema_ref"]["mainMessageName"]
                     flag = flag + 1
-                except:
+                except Exception as e:
                     print("Couldn't get *From* Proto")
+		    print(e)
 
                 serverName = catJSON["items"][0]["server_config"]["server_name"]
 
@@ -131,11 +133,12 @@ class DeviceRegister(Resource):
                     itemEntry["postDataField"] = serverConfig["post_data_field"].replace(
                         "{id}", id)
                     flag = flag + 1
-                except:
+                except Exception as e:
                     print("Couldn't add server API configuration")
+		    print(e)
 
-                items[id] = itemEntry
                 itemEntry["id"] = id
+                items[id] = itemEntry
                 print(itemEntry)
                 mcln.insert_one(json.dumps({id:itemEntry}))
 
@@ -163,16 +166,32 @@ class DeviceRegister(Resource):
                         "{id}", id)
                     itemEntry["postDataField"] = serverConfig["post_data_field"].replace(
                         "{id}", id)
-                    flag = 3
-                except:
+                    flag = flag + 1
+                except Exception as e:
                     print("Couldn't add server API configuration")
+		    print(e)
 
-                items[id] = itemEntry
+		deviceConf = catJSON["items"][0]["device_bosch_api"]
+		
+		try:
+		    itemEntry["properties"] = deviceConf["properties"]
+		    itemEntry["pollUrl"] = deviceConf["poll_url"]
+		    itemEntry["authUrl"] = deviceConf["auth_url"]
+		    itemEntry["authHeaders"] = deviceConf["auth_headers"]
+		    itemEntry["authCred"] = deviceConf["auth_credentials"]
+		    itemEntry["thingUrl"] = deviceConf["thing_url"]
+		    itemEntry["thingHeaders"] = deviceConf["thing_headers"]
+                    flag = flag + 1
+		except Exception as e:
+		    print("Couldn't add device API configuration")
+		    print(e)
+
                 itemEntry["id"] = id
+                items[id] = itemEntry
                 print(itemEntry)
                 hcln.insert_one(json.dumps({id:itemEntry}))
 
-            if(flag == 3):
+            if(flag == 2):
                 flag = 0
                 socket.send_string(json.dumps(itemEntry))
 
