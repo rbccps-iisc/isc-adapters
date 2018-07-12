@@ -144,21 +144,21 @@ def poll_to_url(device_id):
     for p in properties:
         sleep(1)
         r = requests.get(url=poll_url.replace("{propertyKey}", p), headers = http_items[device_id]["thing_headers"])
-	parser = JsonTraverseParser(r.json())
+        parser = JsonTraverseParser(r.json())
         if(parser.traverse(http_items[device_id]["getDataField"]) is not None):
-	    sens_data.update({p:parser.traverse(http_items[device_id]["getDataField"])})	    ##getDataField = results.values.0.value
+            sens_data.update({p:parser.traverse(http_items[device_id]["getDataField"])})	    ##getDataField = results.values.0.value
         else:
             sens_data.update({p:None})    
     try:
-	data = {}
-	data["data"] = json.dumps(sens_data)
-	http_dict = {device_id:json.dumps(data)}
-	print("Pushed", http_dict)
-	redConn.rpush("incoming-messages", http_dict)
-	decode_push.delay()
+        data = {}
+        data["data"] = json.dumps(sens_data)
+        http_dict = {device_id:json.dumps(data)}
+        print("Pushed", http_dict)
+        redConn.rpush("incoming-messages", http_dict)
+        decode_push.delay()
     except Exception as e:
-	print("Couldn't add HTTP data")
-	print(e)
+        print("Couldn't add HTTP data")
+        print(e)
 
 #----------------------------------------------------------------------------------------------------#
 
@@ -247,11 +247,11 @@ except Exception as e:
 try:
     for ids in list(http_items.keys()):
         try:
-	    bosch_init(ids)
+            bosch_init(ids)
 	except Exception as e:
-	    print("Couldn't initialise API for ID", ids)
-	    print(e)
-	try:
+            print("Couldn't initialise API for ID", ids)
+            print(e)
+        try:
             scheduler.add_job(func=poll_to_url.delay, args=[ids], trigger='interval', seconds=60)
             print("Added job for ID", ids)
         except Exception as e:
@@ -285,10 +285,10 @@ def server():
 	if len(list(itemEntry.keys())) == 17:
 	    http_items.update({itemId:itemEntry})
 	    try:
-		bosch_init(itemId)
+                bosch_init(itemId)
 	    except Exception as e:
 		print("Couldn't initialise API for ID", itemId, "after registration")
-		print(e)
+                print(e)
             try:
                 scheduler.add_job(pool_to_url(itemId), 'interval', seconds=60)
             except Exception as e:
