@@ -1,0 +1,61 @@
+syntax = "proto2";
+
+
+
+	message _targetPowerStateParams{
+
+		required bool targetPowerState = 1;
+		
+	}
+
+
+
+	enum ctrlPolicy { //Config mode representation
+		
+		AUTO_LUX = 0;
+		AUTO_TIMER = 1;
+		MANUAL = 2;
+
+	}
+
+	message _targetControlPolicyParams{
+
+		required ctrlPolicy targetControlPolicy = 1;
+		
+	}
+
+	message _targetManualControlParams{
+
+		optional uint32 targetBrightnessLevel = 1;
+	
+	}
+
+
+	message _targetAutoTimerParams{
+
+		optional uint32 targetOnTime = 1;
+		optional uint32 targetOffTime = 2;
+	
+
+	}
+	
+	message _targetAutoLuxParams{
+
+		optional uint32 targetOnLux = 1;
+		optional uint32 targetOffLux = 2;
+
+	}
+	
+
+
+	message _targetConfigurations{
+
+		optional _targetPowerStateParams  targetPowerState = 1;
+		optional _targetControlPolicyParams targetControlPolicyParams = 2;
+		optional _targetAutoTimerParams targetAutoTimerParams = 3;
+		optional _targetAutoLuxParams targetAutoLuxParams = 4;
+		optional _targetManualControlParams targetManualControlParams =5;
+	
+	}	
+
+
