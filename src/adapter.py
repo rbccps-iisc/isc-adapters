@@ -29,50 +29,57 @@ from google.protobuf.json_format import MessageToDict
 import ast
 import pymongo
 import requests
-import asyncio
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.schedulers.background import BackgroundScheduler
 import threading
 from jsontraverse.parser import JsonTraverseParser
 
 redConn = redis.StrictRedis(host='localhost', port=6379, db=0)
 
-scheduler = AsyncIOScheduler()
+scheduler = BackgroundScheduler()
+##scheduler.add_jobstore("mongodb", collection = "scheduler_jobs")
 
 #----------------------------------------------------------------------------------------------------#
 
-#Initialisation of Bosch Climo APIs
+# Initialisation of Bosch Climo APIs
 
 dThingKey = {}
 
+
 def bosch_init(dev_id):
-    
+
     global dThingKey
 
-    bosch_auth_url = http_items[dev_id]["authUrl"]				    ##"http://52.28.187.167/services/api/v1/users/login"
-    bosch_auth_headers = http_items[dev_id]["authHeaders"]			    ##{"Content-Type":"application/json", "Accept":"application/json", "api_key":"apiKey"}
-    bosch_auth_payload = http_items[dev_id]["authCred"]			    ##{"password":"Q2xpbW9AOTAz", "username":"SUlTQ19CQU5HQUxPUkU="}
-    auth_res = requests.post(url = bosch_auth_url, headers = bosch_auth_headers, data = json.dumps(bosch_auth_payload))
+    # "http://52.28.187.167/services/api/v1/users/login"
+    bosch_auth_url = http_items[dev_id]["authUrl"]
+    # {"Content-Type":"application/json", "Accept":"application/json", "api_key":"apiKey"}
+    bosch_auth_headers = http_items[dev_id]["authHeaders"]
+    # {"password":"Q2xpbW9AOTAz", "username":"SUlTQ19CQU5HQUxPUkU="}
+    bosch_auth_payload = http_items[dev_id]["authCred"]
+    auth_res = requests.post(
+        url=bosch_auth_url, headers=bosch_auth_headers, data=json.dumps(bosch_auth_payload))
 
     authToken = auth_res.json()["authToken"]
     OrgKey = auth_res.json()["OrgKey"]
 
-
-    bosch_thing_url = http_items[dev_id]["thingUrl"]				    ##"http://52.28.187.167/services/api/v1/getAllthings"
-    bosch_thing_headers = http_items[dev_id]["thingHeaders"]			    ##{"Accept":"application/json", "api_key":"apiKey", "Authorization":authToken, "X-OrganizationKey":OrgKey}
-    thing_res = requests.get(url = bosch_thing_url, headers = bosch_thing_headers)
+    # "http://52.28.187.167/services/api/v1/getAllthings"
+    bosch_thing_url = http_items[dev_id]["thingUrl"]
+    # {"Accept":"application/json", "api_key":"apiKey", "Authorization":authToken, "X-OrganizationKey":OrgKey}
+    bosch_thing_headers = http_items[dev_id]["thingHeaders"]
+    thing_res = requests.get(url=bosch_thing_url, headers=bosch_thing_headers)
 
     dev_thingKey = thing_res.json()["result"][0]["thingKey"]
-    
-    dThingKey.update({dev_id:dev_thingKey})
+
+    dThingKey.update({dev_id: dev_thingKey})
 
 #----------------------------------------------------------------------------------------------------#
 
 # MongoDB setup
 
+
 client = pymongo.MongoClient()
 
-mdb = client.devices_db_mq	    
-mcln = mdb.devices		    
+mdb = client.devices_db_mq
+mcln = mdb.devices
 
 hdb = client.devices_db_http
 hcln = hdb.devices
@@ -94,7 +101,9 @@ def decode_push():
     if dec_device_id in http_items:
         b64en = jsonData["data"]
         decodedData = base64.b64decode(b64en.encode('utf-8'))
-        mwSub.publish(dec_device_id+'.tx', json.dumps(decodedData.decode('utf-8')))	    ## tx for device transmission
+        # tx for device transmission
+        mwSub.publish(dec_device_id+'.tx',
+                      json.dumps(decodedData.decode('utf-8')))
     elif dec_device_id in items:
         # code for proto decode
         try:
@@ -112,7 +121,8 @@ def decode_push():
 
 @celery_app.task
 def encode_push():
-    out_dict = ast.literal_eval(redConn.lpop("outgoing-messages").decode('utf-8'))
+    out_dict = ast.literal_eval(redConn.lpop(
+        "outgoing-messages").decode('utf-8'))
     en_body = (list(out_dict.values())[0])
     en_id = list(out_dict.keys())[0]
     try:
@@ -121,8 +131,10 @@ def encode_push():
         data["reference"] = "a"
         data["confirmed"] = False
         data["fport"] = 1
-        json_format.Parse(en_body, mw_actuation_message, ignore_unknown_fields=False)
-        data["data"] = base64.b64encode(mw_actuation_message.SerializeToString()).decode('utf-8')
+        json_format.Parse(en_body, mw_actuation_message,
+                          ignore_unknown_fields=False)
+        data["data"] = base64.b64encode(
+            mw_actuation_message.SerializeToString()).decode('utf-8')
         nsSub.publish(items[en_id]["postAdd"], json.dumps(data))
     except Exception as e:
         print("ENCODE ERROR")
@@ -139,20 +151,24 @@ def poll_to_url(device_id):
 
     properties = http_items[device_id]["properties"]
 
-    poll_url = http_items[device_id]["pollUrl"].replace("{thingKey}", thingKey)	    ##"http://52.28.187.167/services/api/v1/property/{thingKey}/{propertyKey}/1m"
-    
+    # "http://52.28.187.167/services/api/v1/property/{thingKey}/{propertyKey}/1m"
+    poll_url = http_items[device_id]["pollUrl"].replace("{thingKey}", thingKey)
+
     for p in properties:
         sleep(1)
-        r = requests.get(url=poll_url.replace("{propertyKey}", p), headers = http_items[device_id]["thing_headers"])
+        r = requests.get(url=poll_url.replace(
+            "{propertyKey}", p), headers=http_items[device_id]["thing_headers"])
         parser = JsonTraverseParser(r.json())
         if(parser.traverse(http_items[device_id]["getDataField"]) is not None):
-            sens_data.update({p:parser.traverse(http_items[device_id]["getDataField"])})	    ##getDataField = results.values.0.value
+            # getDataField = results.values.0.value
+            sens_data.update(
+                {p: parser.traverse(http_items[device_id]["getDataField"])})
         else:
-            sens_data.update({p:None})    
+            sens_data.update({p: None})
     try:
         data = {}
         data["data"] = json.dumps(sens_data)
-        http_dict = {device_id:json.dumps(data)}
+        http_dict = {device_id: json.dumps(data)}
         print("Pushed", http_dict)
         redConn.rpush("incoming-messages", http_dict)
         decode_push.delay()
@@ -166,16 +182,16 @@ def poll_to_url(device_id):
 
 
 def MWSub_onMessage(ch, method, properties, body):
-    if '.rx' in method.routing_key:						## rx for device reception
+    if '.rx' in method.routing_key:  # rx for device reception
         # Change according to wildcard entry
         _id = method.routing_key.replace('.rx', '')
         am_dict = {}
-        am_dict = {_id:body.decode('utf-8')}
+        am_dict = {_id: body.decode('utf-8')}
         redConn.rpush("outgoing-messages", am_dict)
         print("Received", am_dict)
         encode_push.delay()
     else:
-	pass
+        pass
 #_____!!!!!!ADD A CHECK AND METHOD FOR HTTP DEVICES UP THERE, IN CASE IT IS IMPLEMENTED IN FUTURE!!!!!!_____#
 
 
@@ -227,15 +243,19 @@ try:
     for item in list(items.keys()):
         try:
             modules[item] = {}
-            from_spec = importlib.util.spec_from_file_location('from_' + item + '_pb2', adaptersDir + '/id_' + item + '/from_' + item + '_pb2.py')
+            from_spec = importlib.util.spec_from_file_location(
+                'from_' + item + '_pb2', adaptersDir + '/id_' + item + '/from_' + item + '_pb2.py')
             from_mod = importlib.util.module_from_spec(from_spec)
             from_spec.loader.exec_module(from_mod)
-            modules[item]["protoFrom"] = getattr(from_mod, items[item]["protoFrom"])()
+            modules[item]["protoFrom"] = getattr(
+                from_mod, items[item]["protoFrom"])()
 
-            to_spec = importlib.util.spec_from_file_location('to_' + item + '_pb2', adaptersDir + '/id_' + item + '/to_' + item + '_pb2.py')
+            to_spec = importlib.util.spec_from_file_location(
+                'to_' + item + '_pb2', adaptersDir + '/id_' + item + '/to_' + item + '_pb2.py')
             to_mod = importlib.util.module_from_spec(to_spec)
             to_spec.loader.exec_module(to_mod)
-            modules[item]["protoTo"] = getattr(to_mod, items[item]["protoTo"])()
+            modules[item]["protoTo"] = getattr(
+                to_mod, items[item]["protoTo"])()
 
         except Exception as e:
             print("Couldn't load", item)
@@ -248,11 +268,12 @@ try:
     for ids in list(http_items.keys()):
         try:
             bosch_init(ids)
-	except Exception as e:
+        except Exception as e:
             print("Couldn't initialise API for ID", ids)
             print(e)
         try:
-            scheduler.add_job(func=poll_to_url.delay, args=[ids], trigger='interval', seconds=60)
+            scheduler.add_job(func=poll_to_url.delay, args=[
+                              ids], trigger='interval', seconds=60)
             print("Added job for ID", ids)
         except Exception as e:
             print("Couldn't add process with ID", ids)
@@ -265,7 +286,6 @@ except Exception as e:
 
 try:
     scheduler.start()
-    threading.Thread(asyncio.get_event_loop().run_forever()).start()
 except Exception as e:
     print("Couldn't start scheduler")
     print(e)
@@ -281,36 +301,41 @@ def server():
         print("Received request  %s" % message)
         itemEntry = json.loads(str(message, 'utf-8'))
         itemId = itemEntry["id"]
-        
-	if len(list(itemEntry.keys())) == 17:
-	    http_items.update({itemId:itemEntry})
-	    try:
+
+        if len(list(itemEntry.keys())) == 17:
+            http_items.update({itemId: itemEntry})
+            try:
                 bosch_init(itemId)
-	    except Exception as e:
-		print("Couldn't initialise API for ID", itemId, "after registration")
+            except Exception as e:
+                print("Couldn't initialise API for ID",
+                      itemId, "after registration")
                 print(e)
             try:
-                scheduler.add_job(pool_to_url(itemId), 'interval', seconds=60)
+                scheduler.add_job(poll_to_url(itemId), 'interval', seconds=60)
             except Exception as e:
                 print("Couldn't add job for ID", itemId, "after registration")
-		print(e)
-	    
+                print(e)
+
         else:
             modules[itemId] = {}
             try:
-                from_spec = importlib.util.spec_from_file_location('from_' + itemId + '_pb2', adaptersDir + '/id_' + itemId + '/from_' + itemId + '_pb2.py')
+                from_spec = importlib.util.spec_from_file_location(
+                    'from_' + itemId + '_pb2', adaptersDir + '/id_' + itemId + '/from_' + itemId + '_pb2.py')
                 from_mod = importlib.util.module_from_spec(from_spec)
                 from_spec.loader.exec_module(from_mod)
-                modules[itemId]["protoFrom"] = getattr(from_mod, itemEntry["protoFrom"])()
+                modules[itemId]["protoFrom"] = getattr(
+                    from_mod, itemEntry["protoFrom"])()
 
-                to_spec = importlib.util.spec_from_file_location('to_' + itemId + '_pb2', adaptersDir + '/id_' + itemId + '/to_' + itemId + '_pb2.py')
+                to_spec = importlib.util.spec_from_file_location(
+                    'to_' + itemId + '_pb2', adaptersDir + '/id_' + itemId + '/to_' + itemId + '_pb2.py')
                 to_mod = importlib.util.module_from_spec(to_spec)
                 to_spec.loader.exec_module(to_mod)
-                modules[itemId]["protoTo"] = getattr(to_mod, itemEntry["protoTo"])()
+                modules[itemId]["protoTo"] = getattr(
+                    to_mod, itemEntry["protoTo"])()
 
             except Exception as e:
                 print("Couldn't load objects")
-		print(e)
+                print(e)
 
 
 Process(target=server).start()
